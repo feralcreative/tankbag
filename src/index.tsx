@@ -40,6 +40,7 @@ import { suggestionRoutes } from './routes/suggestions'
 import { rosterRoutes } from './routes/roster'
 import { followRoutes } from './routes/follows'
 import { rendezvousRoutes } from './routes/rendezvous'
+import { routeRiderRoutes } from './routes/route-riders'
 import { profileRoutes } from './routes/profile'
 import { builderRoutes } from './routes/builder'
 import { importRoutes } from './routes/import'
@@ -238,6 +239,7 @@ app.route('/', liveRoutes)
 app.route('/', suggestionRoutes)
 app.route('/', followRoutes)
 app.route('/', rendezvousRoutes)
+app.route('/', routeRiderRoutes)
 app.route('/', friendRoutes)
 // Literal paths, and ahead of pageRoutes whose /:handle{@…} route would not
 // catch them anyway — kept together with the other rider-facing modules.

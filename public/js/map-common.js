@@ -977,6 +977,34 @@
   // builder.js both reached for `new mapboxgl.Marker` directly and both had to
   // change when the engine did. They go through these four functions now.
 
+  // THE MARKER Z-SCALE, WRITTEN DOWN IN ONE PLACE BECAUSE IT IS NOT ONE.
+  //
+  // Polylines never compete with markers — Google draws them in a lower pane —
+  // so the 0..4 values elsewhere in this file order the ROUTE against itself and
+  // have nothing to do with these. What follows is the marker order, low to
+  // high:
+  //
+  //   MARKER_Z        stops and POIs — the ride's own furniture
+  //   5               the fuel walls and the bedtime marks: warnings ABOUT the
+  //                   route, which must not be hidden behind a pin sitting on it
+  //   6               the moment dot — where the rider is right now
+  //   PREVIEW_Z       search results and meeting-point candidates
+  //
+  // **AN UNSET zIndex IS NOT A LOW ONE, AND THAT WAS THE BUG.** This function
+  // set none at all until 2026-09-06, so every stop and POI fell out of the
+  // scale into Google's default ordering, which places a marker by its VERTICAL
+  // POSITION — further south draws in front. So an ordinary gas-station pin
+  // covered a meeting-point candidate at zIndex 6, and whether it did depended
+  // on which of the two happened to be further down the screen. Reported as
+  // "number 3 is behind a gas station icon so I can't hover on it", and the
+  // positional part is the tell: it hid the dot and it took the POINTER with it,
+  // because for an advanced marker the DOM order follows the z-order.
+  //
+  // Give a new marker a number from this list rather than leaving it unset. An
+  // unset one is not neutral — it outranks things unpredictably.
+  const MARKER_Z = 4;
+  const PREVIEW_Z = 7;
+
   function addMarker(map, lngLat, element, opts) {
     requireInit("addMarker");
     const o = opts || {};
@@ -986,6 +1014,8 @@
       content: element,
       gmpDraggable: !!o.draggable,
       title: o.title || "",
+      // Explicit, and the whole point: see the scale above.
+      zIndex: MARKER_Z,
     });
   }
 
@@ -1572,9 +1602,13 @@
         p.pins[i] = new Marker.AdvancedMarkerElement({
           map,
           content: previewEl(p, i),
-          // Above the route and the fuel walls: these are the thing being chosen
-          // right now, and they are gone the moment the dropdown closes.
-          zIndex: 6,
+          // ABOVE EVERY OTHER MARKER, not merely above the route and the fuel
+          // walls. These are the thing being chosen RIGHT NOW and they are gone
+          // the moment the dropdown closes, so nothing standing on the map has a
+          // better claim to the pixels — or to the pointer, which is what makes
+          // this a correctness rule rather than a visual one: a covered dot
+          // cannot be hovered, and hovering is how a candidate is read.
+          zIndex: PREVIEW_Z,
         });
       }
       p.pins[i].position = toLatLng(list[i].lngLat);
@@ -1809,8 +1843,9 @@
         b.pins[i] = new Marker.AdvancedMarkerElement({
           map,
           content: el,
-          // Above the route and the fuel overlay, below the search dots: it is a
-          // standing annotation, and the dots are the thing being chosen now.
+          // Above the ride's own pins and the fuel overlay, below the search
+          // dots: it is a standing annotation, and the dots are the thing being
+          // chosen right now. See the marker z-scale above addMarker().
           zIndex: 5,
         });
       }

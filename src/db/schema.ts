@@ -1856,8 +1856,55 @@ export const altVotes = pgTable(
   ],
 )
 
+// WHO IS ON THIS STRETCH OF ROAD. Ziad's call, 2026-09-06, and it supersedes
+// `days.subgroup_id` as the answer to that question without removing it.
+//
+// A SUBGROUP COULD NOT SAY IT. A route carried one subgroup or none, and a rider
+// belonged to one subgroup for the whole ride — so "three riders join at Portland
+// and one of them peels off at Eugene" had nowhere to live: those three share a
+// group, and the group is what a route is tagged with. Every real ride Ziad has
+// planned breaks it the same way, because the set of people riding together
+// changes for reasons that have nothing to do with where anybody set off from.
+//
+// SO THE PRIMITIVE IS THE RIDER, NOT THE GROUP. A group survives as a convenience
+// for assigning several riders at once and as the thing a meeting point is
+// proposed FOR — it still answers "where does this lot set off from" — but it is
+// no longer what says who rides a route.
+//
+// KEYED ON `day_uid` AND CASCADING FROM `rides`, NOT FROM `days`. `days.id`
+// churns on every save — the builder's PUT deletes and re-inserts the whole graph
+// — so an id here would be dangling the first time anybody moved a stop. Same
+// arrangement as `alt_votes` and `point_details`, and it carries the same
+// obligation: `reconcileDayRiders()` deletes rows whose uid left the payload, and
+// `insertRideGraph` calls it. Skip that and a deleted route keeps its roster
+// forever.
+//
+// ROWS ARE AN OVERRIDE, AND THEIR ABSENCE IS NOT "NOBODY". A route with no rows
+// INHERITS the set from the route before it, and the first route of a ride with
+// no rows is ridden by the whole roster — Ziad's call, 2026-09-06, because that
+// is how a ride actually reads: you say who leaves and who joins, not who is
+// present on each of nine routes. `resolveRouteRiders()` in src/riders/policy.ts
+// is the walk, and it is the only place that rule lives. A route ridden by
+// nobody is not a thing anyone means, which is what makes the absence
+// unambiguous.
+export const dayRiders = pgTable(
+  'day_riders',
+  {
+    rideId: bigint('ride_id', { mode: 'number' })
+      .notNull()
+      .references(() => rides.id, { onDelete: 'cascade' }),
+    dayUid: varchar('day_uid', { length: 12 }).notNull(),
+    riderId: bigint('rider_id', { mode: 'number' })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.rideId, t.dayUid, t.riderId] }), index('idx_day_rider_ride').on(t.rideId)],
+)
+
 export type PlaceRow = typeof places.$inferSelect
 export type RideMemberRow = typeof rideMembers.$inferSelect
+export type DayRiderRow = typeof dayRiders.$inferSelect
 export type FriendshipRow = typeof friendships.$inferSelect
 export type AltVoteRow = typeof altVotes.$inferSelect
 export type RideSubgroupRow = typeof rideSubgroups.$inferSelect

@@ -2686,6 +2686,69 @@
   }
 }
 
+// WHO IS ON THIS STRETCH OF ROAD, in the route head beside the group picker.
+//
+// A BUTTON RATHER THAN A LABEL, because the set is editable and a click target
+// that looks like text is one a rider never presses. Quiet by default: on a ride
+// where nobody joins or leaves it reads "4 riders" on every row and must not
+// compete with the route's own name.
+.day-riders {
+  flex: none;
+  max-width: 12em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: inherit;
+  font-size: 0.7em;
+  padding: 0.2em 0.45em;
+  border: 1px solid $grey;
+  border-radius: 999px;
+  background: $white;
+  color: $neutral-50;
+  cursor: pointer;
+
+  &:hover {
+    border-color: $neutral-76;
+    color: $neutral-29;
+  }
+
+  // A ROUTE WHERE THE SET CHANGES IS THE ONE WORTH LOOKING AT, so it is the one
+  // that carries color. `$signal` and not `$warning`: somebody joining or
+  // peeling off is the plan working, not a problem with it — the same
+  // distinction .row-dist-dry makes in the other direction.
+  &.is-junction {
+    border-color: $signal;
+    color: $signal;
+    font-weight: 600;
+  }
+}
+
+// The picker's list. Plain rows with real checkboxes — the label wraps the input
+// so the whole row is the hit target, which a 380px drawer's worth of names
+// needs more than a styled control would give it.
+.rider-picks {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.15rem;
+  max-height: 40vh;
+  overflow-y: auto;
+
+  label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3em 0.2em;
+    border-radius: 5px;
+    cursor: pointer;
+
+    &:hover {
+      background: rgba(0, 0, 0, 0.04);
+    }
+  }
+}
+
 // WAS the two axes, whose clock and which of their events. The event select
 // went on 2026-09-03 — what is pinned is always the main group's departure — so
 // this is now the fairness note's own strip, kept as a block because the rule

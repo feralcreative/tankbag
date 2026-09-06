@@ -21,6 +21,7 @@ import { ensureUids } from './uid'
 import { dayRevision } from './day-revision'
 import { normalizePrefs, routePrefsSchema } from './route-prefs'
 import { reconcileVotes } from '../votes/service'
+import { reconcileDayRiders } from '../day-riders/service'
 import { demoteOrphanComments } from '../comments/service'
 import { reconcileSubgroups, writeRideAnchors } from '../subgroups/service'
 
@@ -479,6 +480,17 @@ export async function insertRideGraph(
   // identical trap point_details carries, for the identical reason: alt_votes
   // cascades from `rides`, so a save that deletes every day takes none of them.
   await reconcileVotes(tx, rideId, liveDayUids)
+  // THE FOURTH, and the same trap a fourth time: `day_riders` keys on days.uid
+  // and cascades from `rides`, so a route that leaves the payload takes none of
+  // its roster with it. Left alone, a deleted route keeps saying who was on it
+  // — and a uid that later gets reused inherits a set nobody chose.
+  //
+  // It runs for EVERY saver, owner or editor, like the comment demotion above
+  // and unlike point_details. There is no `preserve` case because there is
+  // nothing private here to destroy: who is on a route is already visible to
+  // everyone the roster is visible to, so an editor's save carries the same
+  // rows the owner's would.
+  await reconcileDayRiders(tx, rideId, liveDayUids)
 }
 
 // Empty string to null, so clearing a field removes the value rather than

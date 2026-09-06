@@ -597,6 +597,12 @@
     // The default matches the proposer's own, so the panel and an old client
     // that sends nothing get the same answer.
     maxDivertMi: 25,
+    // Who is on which route, resolved server-side. NULL until it loads — the row
+    // renderer checks, because a line that guessed "everyone" before the fetch
+    // landed would flicker to the truth on exactly the routes where the truth is
+    // interesting. Not part of the payload: day_riders is reconciled by uid like
+    // votes and point details rather than churned with the graph.
+    routeRiders: null,
     // markers[r] = { stops: [{marker, el}], pois: [{marker, el}] }
     markers: [],
     // WHICH DAY IS WAITING FOR A MAP CLICK, or null. Set by a day's "+ Stop"
@@ -4027,6 +4033,209 @@
     state.days.push(day);
   }
 
+  // --- Who is on this stretch of road ------------------------------------
+  //
+  // #67's last mile, and the thing subgroups could not say. A route carried ONE
+  // group and a rider belonged to ONE group for the whole ride, so "three riders
+  // join at Portland and one of them peels off at Eugene" had nowhere to live.
+  // Ziad's call, 2026-09-06: the rider is the primitive. See src/riders/policy.ts.
+  //
+  // HELD SEPARATELY FROM state.days AND NOT IN THE PAYLOAD. `day_riders` is
+  // reconciled by uid like votes and point details rather than churned with the
+  // graph, and a route's roster is set by its own deliberate press instead of
+  // riding on a three-second autosave — so this is loaded, patched from the
+  // response of a write, and never sent with a save.
+  //
+  // NULL UNTIL IT LOADS, which is what the row renderer checks: a line that
+  // guessed "everyone" before the fetch landed would flicker to the truth a
+  // moment later on exactly the routes where the truth is interesting.
+  function routeRidersOf(day) {
+    const rr = state.routeRiders;
+    if (!rr || !day || !day.uid) return null;
+    return rr.byUid[day.uid] || null;
+  }
+
+  /** Load the resolved sets. Cheap, and re-read after every write because one
+   *  route's override changes every route after it that inherits — patching a
+   *  local copy from the request just sent is wrong from the next route on. */
+  async function loadRouteRiders() {
+    if (!state.rideId) return;
+    try {
+      const res = await fetch("/api/rides/" + state.rideId + "/route-riders");
+      if (!res.ok) return;
+      applyRouteRiders(await res.json());
+    } catch (err) {
+      // Not a toast. The line is an annotation on a row; a ride is perfectly
+      // editable without it, and a failure here must not read as a save problem.
+      console.warn("[builder] route riders:", err);
+    }
+  }
+
+  function applyRouteRiders(data) {
+    if (!data || !Array.isArray(data.routes)) return;
+    const byUid = {};
+    for (const r of data.routes) byUid[r.uid] = r;
+    state.routeRiders = {
+      byUid: byUid,
+      junctions: data.junctions || [],
+      // Only present on the GET. A write answers with the resolution and not
+      // with the roster, which does not change, so the held one is kept.
+      riders: data.riders || (state.routeRiders && state.routeRiders.riders) || [],
+    };
+    renderDays();
+  }
+
+  const riderNameOf = (id) => {
+    const list = (state.routeRiders && state.routeRiders.riders) || [];
+    const hit = list.find((r) => r.riderId === id);
+    return hit ? hit.displayName : "somebody";
+  };
+
+  /**
+   * The line under a route head saying who rides it.
+   *
+   * IT NAMES THE CHANGE, NOT THE WHOLE SET, once a ride has junctions. "Dylan
+   * joins here" is what a planner is looking for; a list of four names repeated
+   * down every row is noise they have to diff by eye to find the one row that
+   * differs. The full set is in the `title` and in the picker.
+   *
+   * EMPTY WHEN THE RIDE HAS ONE RIDER, which is nearly every ride: a line saying
+   * "you" on all nine routes is a column of nothing.
+   */
+  function routeRidersHtml(day, r) {
+    const rr = routeRidersOf(day);
+    if (!rr) return "";
+    const roster = (state.routeRiders && state.routeRiders.riders) || [];
+    if (roster.length < 2) return "";
+    const junction = (state.routeRiders.junctions || []).find((j) => j.position === rr.position);
+    const names = rr.riderIds.map(riderNameOf);
+    const full = names.length ? names.join(SEP) : "nobody yet";
+    let label;
+    if (junction && (junction.joined.length || junction.left.length)) {
+      const bits = [];
+      if (junction.joined.length) bits.push(junction.joined.map(riderNameOf).join(", ") + " joins here");
+      if (junction.left.length) bits.push(junction.left.map(riderNameOf).join(", ") + " leaves here");
+      label = bits.join(SEP);
+    } else {
+      label = names.length + (names.length === 1 ? " rider" : " riders");
+    }
+    return (
+      '<button type="button" class="day-riders' +
+      (junction ? " is-junction" : "") +
+      '" data-day="' +
+      r +
+      '" title="' +
+      esc(full) +
+      '" aria-label="Riders on ' +
+      esc(dayLabel(r)) +
+      ": " +
+      esc(full) +
+      '">' +
+      esc(label) +
+      "</button>"
+    );
+  }
+
+  /**
+   * The picker: tick who is on this route.
+   *
+   * A DIALOG RATHER THAN A ROW CONTROL. The set can be the whole roster, the
+   * list has to show who is NOT on the route as well as who is, and a row in a
+   * 380px drawer has nowhere to put that. It also keeps the day list free of a
+   * control that would re-render the rows it sits in — #188.
+   *
+   * "EVERYONE FROM HERE ON" IS THE CLEAR BUTTON, and it is labelled for what it
+   * does rather than for what it stores. Clearing the override makes the route
+   * inherit from the one before it, which on the first route means the whole
+   * roster and elsewhere means "no change here" — so the honest label is about
+   * the change, not the row.
+   */
+  function openRouteRiders(r) {
+    const day = state.days[r];
+    const rr = routeRidersOf(day);
+    if (!day || !rr) return;
+    const roster = (state.routeRiders && state.routeRiders.riders) || [];
+    const on = new Set(rr.riderIds);
+    const el = routeRidersDialog();
+    el.dataset.uid = day.uid;
+    el.querySelector("#tb-riders-title").textContent = "Who rides " + dayLabel(r) + "?";
+    el.querySelector(".modal-lede").textContent =
+      "Tick everyone riding " + dayLabel(r) + ". They stay on every route after this one until you say otherwise.";
+    el.querySelector(".rider-picks").innerHTML = roster
+      .map(
+        (m) =>
+          '<li><label><input type="checkbox" value="' +
+          m.riderId +
+          '"' +
+          (on.has(m.riderId) ? " checked" : "") +
+          "> " +
+          esc(m.displayName) +
+          "</label></li>",
+      )
+      .join("");
+    if (typeof el.showModal === "function") {
+      if (!el.open) el.showModal();
+    } else {
+      el.setAttribute("open", "");
+    }
+  }
+
+  // Built once and reused, the same arrangement as errorDialog() and for the
+  // same reasons: appended to <body> because showModal() needs the top layer,
+  // and both buttons carry `.btn` because the panel's own button rules are
+  // nested inside `.builder-panel`, which a dialog in the top layer is not.
+  function routeRidersDialog() {
+    let el = $("tb-riders");
+    if (el) return el;
+    el = document.createElement("dialog");
+    el.id = "tb-riders";
+    el.className = "modal";
+    el.setAttribute("aria-labelledby", "tb-riders-title");
+    el.innerHTML =
+      '<h2 id="tb-riders-title"></h2>' +
+      '<div class="modal-body">' +
+      '<p class="modal-lede"></p>' +
+      '<ul class="rider-picks"></ul>' +
+      "</div>" +
+      '<div class="modal-error-acts">' +
+      // "Same as before" and NOT "Clear": what it does is make this route follow
+      // the one before it, which on route 1 is the whole roster. The label names
+      // the change rather than the storage.
+      '<button type="button" class="btn btn-quiet" data-riders-inherit>Same as before</button>' +
+      '<button type="button" class="btn" data-riders-save>Save</button>' +
+      "</div>";
+    document.body.appendChild(el);
+    const close = () => {
+      if (typeof el.close === "function" && el.open) el.close();
+      else el.removeAttribute("open");
+    };
+    el.querySelector("[data-riders-save]").addEventListener("click", () => {
+      const ids = [...el.querySelectorAll(".rider-picks input:checked")].map((x) => Number(x.value));
+      close();
+      putRouteRiders(el.dataset.uid, ids);
+    });
+    el.querySelector("[data-riders-inherit]").addEventListener("click", () => {
+      close();
+      putRouteRiders(el.dataset.uid, []);
+    });
+    return el;
+  }
+
+  async function putRouteRiders(uid, riderIds) {
+    if (!state.rideId) return;
+    try {
+      const res = await fetch("/api/rides/" + state.rideId + "/route-riders/" + encodeURIComponent(uid), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ riderIds: riderIds }),
+      });
+      if (!res.ok) return toast("Could not set who rides that route", true);
+      applyRouteRiders(await res.json());
+    } catch (err) {
+      toast("Could not set who rides that route", true);
+    }
+  }
+
   // The picker that sits in a day header. Empty string when the ride has no
   // subgroups, so daySectionHtml concatenates nothing.
   function daySubgroupHtml(day, r) {
@@ -5590,6 +5799,7 @@
       '">' +
       altBadge +
       daySubgroupHtml(day, r) +
+      routeRidersHtml(day, r) +
       '<span class="day-actions">' +
       // Empty for the same reason .day-del is: icon-reverse.svg comes in through
       // a CSS mask on ::before, so it takes the button's color and its disabled
@@ -8930,6 +9140,10 @@
         // every newly planned ride until the rider happens to open it, which is
         // exactly the ride where they are least likely to think to look.
         loadRiders();
+        // AND WHO IS ON WHICH ROUTE, for the same reason: it returns immediately
+        // on a ride with no id, so a newly planned ride would show no rider line
+        // on any route until something else happened to reload it.
+        loadRouteRiders();
         // NOT initComments() here. Its host element is server-rendered only for
         // a ride that already has an id, so on a brand-new ride there is nothing
         // in the DOM to bind to and it would return without doing anything.
@@ -9159,6 +9373,7 @@
         return;
       }
       if (btn.classList.contains("pref-btn")) return togglePref(r, btn);
+      if (btn.classList.contains("day-riders")) return openRouteRiders(Number(btn.dataset.day));
       if (btn.classList.contains("day-rev")) return reverseDay();
       if (btn.classList.contains("day-menu-btn")) {
         return toggleDayMenu(sec.querySelector(".day-head"), btn, r);
@@ -9653,6 +9868,11 @@
     // first open paints with no round trip. On a ride with no id yet it returns
     // immediately without asking the server anything.
     loadRiders();
+    // Not awaited either. Every route row asks who is on it, so this is what
+    // turns those lines on — and until it lands they render nothing rather than
+    // guessing, which is why a slow answer costs no correctness. It returns
+    // immediately on a ride with no id.
+    loadRouteRiders();
     // Same reasoning as loadRiders above: the count beside the heading is the
     // only hint that anybody has said anything, and warming it costs one request
     // on a ride that has an id. It returns immediately on one that does not.

@@ -12,6 +12,26 @@
 **Closes, when it merges:** [#67](https://github.com/feralcreative/routeloop/issues/67) and [#52](https://github.com/feralcreative/routeloop/issues/52). Merged before it, in order: the recycle bin as [#149](https://github.com/feralcreative/routeloop/pull/149), the Paddock as [#151](https://github.com/feralcreative/routeloop/pull/151), the rider and access layer as [#152](https://github.com/feralcreative/routeloop/pull/152), and membership and voting as [#153](https://github.com/feralcreative/routeloop/pull/153).
 **For:** the next agent, or the owner returning cold
 
+## Who is on which stretch of road—2026-09-06
+
+**The model changed and `days.subgroup_id` is no longer the answer to "who rides this".** Ziad's call, after describing the ride that breaks the old one: ride to Portland, a friend joins as far as Seattle, they peel off, carry on to Vancouver—and then the harder version, three riders joining together and ONE of them leaving further down the road. A route carried one subgroup and a rider belonged to one subgroup for the whole ride, so those three share a group and there was no way to say only one of them carries on.
+
+**The rider is the primitive now.** `day_riders` (`ride_id`, `day_uid`, `rider_id`), keyed on uid and cascading from `rides` like `alt_votes` and `point_details`, reconciled by `reconcileDayRiders()` inside `insertRideGraph`. `src/day-riders/policy.ts` is the pure half—`resolveRouteRiders()`, `riderJunctions()`, `routesForRider()`, `firstRouteFor()`—with 15 tests, and `service.ts` is the query half.
+
+**Rows are an override; their absence means inherit.** A route with none takes the set from the route before it, and the first route of a ride with none is ridden by the whole roster. Ziad's call over "everyone unless removed": you say who joins and who leaves and it holds until you say otherwise, so the Portland ride is two answers rather than four—and the two answers ARE the two junctions.
+
+**`riderJunctions()` is `junctions()` generalized.** A set difference describes any change, including one-of-three peeling off, and a route where somebody leaves and somebody joins is ONE junction with both lists rather than a split followed by a meet.
+
+**A GROUP IS NOT GONE.** It still answers where a lot of riders set off from, which is what the meeting-point proposer reads, and it is still how a planner assigns several riders at once.
+
+**The schema change is additive, so it is safe in one deploy.** `drizzle/0029_sweet_master_mold.sql` is a `CREATE TABLE` plus two cascading FKs and an index—no drop, no `ALTER COLUMN`, no rename—and the old code never touches the table. `days.subgroup_id` and `ride_members.subgroup_id` both stay; dropping either is a contract-phase deploy that has not been decided.
+
+**`src/day-riders/` and NOT `src/riders/`, which is a `.gitignore` trap.** `riders/` is ignored repo-wide because rider records pulled out of a database dump land there with real email addresses—so the module was silently invisible to git and would have been missing from the commit, with a fresh clone failing to typecheck. Caught before committing. Do not add a negation to that rule.
+
+**Not run against a database.** `npm run db:migrate` has not been executed anywhere: the migration is generated and read, not applied. Nothing in the API or the picker has been exercised in a browser, and the picker's dialog, the per-route line and the junction labels all need a manual pass.
+
+**Still on subgroups and not yet moved over:** the roadbook, the hand-off page, all four exports and the per-day zip still narrow by `?group` and `strandOf`, which is a group's run rather than a rider's. `routesForRider()` is the replacement and nothing calls it yet.
+
 ## Finishing the grouping work before the PR—2026-09-06
 
 Six things were listed as still rough on [#239](https://github.com/feralcreative/routeloop/issues/239). Five are done and the sixth is by design.
