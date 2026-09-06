@@ -1615,7 +1615,7 @@
   // three choices actually ask of everybody rather than comparing two numbers.
   //
   // POOLED AND DETACHED, never destroyed, the same as the preview dots and the
-  // fuel walls above: a rider pressing Find a meeting point twice would
+  // fuel walls above: a rider pressing Find meeting points twice would
   // otherwise rebuild every line, and there is one per candidate per joining
   // group.
   //
@@ -1629,37 +1629,68 @@
   // NOT dashIcons(), which is tuned for a GHOSTED day and carries
   // GHOST_OPACITY — an approach is a live annotation about a choice the rider is
   // making right now, and at ghost opacity over busy tiles it is not readable.
-  // Dashed rather than solid because it is not a day of the ride: nothing here
-  // is saved, and a solid line would read as another route on the map.
+  // Dashed because it is not a day of the ride: nothing here is saved, and a
+  // solid line at rest would read as another route on the map.
   // `color` is the joining group's, so a rider comparing three groups' roads can
   // tell whose is whose — the same reason the candidate dots take it. Null falls
   // back to the neutral pair, which is what a single unattributed approach wants
   // and what this drew for every line before groups were colored.
-  function approachDashes(lit, color) {
+  //
+  // THE DASHES ARE THE RESTING STATE AND NOTHING ELSE — the hovered one is
+  // SOLID, see approachStyle() — so there is no `lit` parameter to get wrong.
+  // It had one while the highlight was opacity alone, and it went dead the day
+  // the hover became solid.
+  function approachDashes(color) {
     return [
       {
         icon: {
           path: "M 0,-1 0,1",
-          strokeColor: color || (lit ? "#1f1f1f" : "#8a8a8a"),
-          // FULLY OPAQUE WHEN IT IS THE ONE BEING POINTED AT. Ziad's call,
-          // 2026-09-04: it was 0.95 against 0.55, which is not a difference
-          // anybody can see on a busy map, so hovering a row told the rider
-          // almost nothing about which road it meant. Holding back was worry
-          // about an approach being mistaken for a planned route, and the DASHES
-          // already answer that — a dashed line is not a road anyone has
-          // planned, at any opacity.
-          //
-          // The unlit end came down to 0.35 in the same change: a highlight is a
-          // ratio, so raising the lit one and leaving the rest where they were
-          // would have bought half the contrast.
-          strokeOpacity: lit ? 1 : 0.35,
-          strokeWeight: lit ? 4 : 3,
+          strokeColor: color || "#8a8a8a",
+          // HALF, AND THAT IS THE RESTING OPACITY OF EVERY APPROACH ON THE MAP.
+          // Ziad's call, 2026-09-05: it was 0.55, then 0.35 when the lit end
+          // went to 1 on the reasoning that a highlight is a ratio — and at
+          // 0.35 over busy tiles a road nobody is pointing at is nearly gone,
+          // which defeats the reason three of them are drawn at once. The
+          // contrast comes from solid-versus-dashed now, so the resting line
+          // can afford to be legible.
+          strokeOpacity: 0.5,
+          strokeWeight: 3,
           scale: 3,
         },
         offset: "0",
         repeat: "14px",
       },
     ];
+  }
+
+  /**
+   * The whole look of one approach, hovered or at rest.
+   *
+   * THE HOVERED ONE IS A SOLID LINE AT FULL OPACITY. Ziad's call, 2026-09-05,
+   * and it reverses the "dashed at every opacity" reasoning above: with three
+   * groups' roads on the map at once, a dashed line at opacity 1 beside dashed
+   * lines at half opacity is a difference the eye has to look for, and pointing at a row
+   * has to answer "which road is that" instantly. Solid versus dashed is a
+   * difference in KIND rather than in degree, so the one being pointed at stops
+   * competing with the others. The worry it was avoiding — an approach read as a
+   * planned route — is answered by the fact that it is solid only while the
+   * pointer is on its row, which is not a state anything saved is ever in.
+   *
+   * The dashes live in `icons` on a polyline whose own stroke is invisible, so
+   * the two states are mutually exclusive by construction: solid sets a real
+   * `strokeOpacity` and empties `icons`, dashed puts the stroke back to 0.
+   */
+  // THE zIndex IS IN HERE BECAUSE `Polyline` HAS NO `setZIndex()`. Markers and
+  // Circles do, which is what makes the call look reasonable and is why it went
+  // unnoticed: `line.setZIndex(...)` threw a TypeError on the FIRST line of the
+  // pool, inside a pointerenter handler, and took the rest of the loop with it —
+  // so hovering any row lit only the first candidate's road and every other row
+  // did nothing at all. Reported as "nothing but the very first route works",
+  // 2026-09-05. A polyline's z-order is an option like any other.
+  function approachStyle(lit, color) {
+    const zIndex = lit ? 3.7 : 3.6;
+    if (!lit) return { strokeOpacity: 0, strokeWeight: 3, icons: approachDashes(color), zIndex };
+    return { strokeColor: color || "#1f1f1f", strokeOpacity: 1, strokeWeight: 4, icons: [], zIndex };
   }
 
   function approachOf(map) {
@@ -1691,8 +1722,7 @@
           // their own line behind it.
           zIndex: 3.6,
           clickable: false,
-          strokeOpacity: 0,
-          icons: approachDashes(false),
+          ...approachStyle(false, null),
         });
       }
       const line = a.lines[i];
@@ -1702,24 +1732,34 @@
       // repaints a line in its own color without the caller having to hand the
       // whole set back in.
       line.set("tbColor", list[i].color || null);
-      line.setOptions({ icons: approachDashes(false, list[i].color) });
+      line.setOptions(approachStyle(false, list[i].color));
       line.setMap(map);
       line.setVisible(true);
     }
     for (let i = list.length; i < a.lines.length; i++) a.lines[i].setVisible(false);
   }
 
-  /** Lift the approaches belonging to one candidate, or level them all with
-   *  null. Lifting is opacity and weight rather than color: these are all the
-   *  same KIND of thing and recoloring one would read as a different one. */
+  /**
+   * Lift the approach belonging to one candidate, or put them all back at rest
+   * with null.
+   *
+   * Lifting is solid-versus-dashed, opacity and weight — never color, because
+   * these are all the same KIND of thing and recoloring one would read as a
+   * different one. The color a line already carries is its group's.
+   *
+   * NULL LEVELS THEM ALL DOWN, NOT ALL UP, and that was wrong here until
+   * 2026-09-05: `i == null` counted as lit for every line, so the initial paint
+   * showed them all at rest and a pointer leaving a row left them all lifted.
+   * Invisible while lifting was opacity alone; with a solid line it would put
+   * three solid roads on the map the moment the pointer moved off a row.
+   */
   function highlightMeetApproaches(map, i) {
     const a = approaches.get(map);
     if (!a) return;
     a.lines.forEach((line) => {
       if (!line.getVisible()) return;
-      const lit = i == null || line.get("tbGroup") === i;
-      line.setOptions({ icons: approachDashes(lit, line.get("tbColor")), strokeOpacity: 0 });
-      line.setZIndex(lit ? 3.7 : 3.6);
+      const lit = i != null && line.get("tbGroup") === i;
+      line.setOptions(approachStyle(lit, line.get("tbColor")));
     });
   }
 
