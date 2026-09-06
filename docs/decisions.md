@@ -113,6 +113,20 @@ Four terms, all measured in miles-equivalent so the weights are readable rather 
 
 **It can return nothing, and that is a real answer.** Two origins on opposite sides of a trunk running away from both have no sensible rendezvous, and offering the least bad one would be worse than saying so.
 
+## A shaping point is snapped to the routed road, not to the drop, 2026-09-06
+
+A shaping point is dropped wherever the rider's pointer lands, which is routinely a coordinate that is not on any road—a field, a river, the wrong carriageway of a divided highway, the frontage road running beside the one they meant. Routes accepts it and snaps it to whatever road is nearest, so the road that comes back is not reliably the road the rider pointed at. The handle then sits out in the field saying nothing about which road was chosen, the leg's geometry is the wrong one, and that wrong geometry is what every export and every hand-off to a nav app is built from.
+
+**The snap happens AFTER the response, from the routed geometry.** The road Google chose is already in hand, so projecting each via onto it costs nothing: no Roads API, no second credential on `GMAPS_SERVER_KEY`, and no request per drag. `snapToTrack()` in `route-shape.js` is the arithmetic and `snapVias()` in `builder.js` is the caller.
+
+**Roads API `snapToRoads` was the alternative and was rejected on cost.** It snaps BEFORE the request, so the handle would land correctly the first time instead of being corrected a moment later—which is genuinely nicer—but it is a billable call on a SKU this project does not currently enable, spent on every single drag of every shaping point. The correction after the fact buys the same road for nothing. **The consequence to state rather than treat as a bug: the handle moves once the response lands.** That is the price, and it is visible.
+
+**Projected onto the nearest segment, not snapped to the nearest vertex.** A routed polyline is sparse on a long straight—vertices can be miles apart on an interstate—so a vertex snap can move a handle further than the original error, and past the interchange the rider was aiming at. The perpendicular foot is on the road either way and is the nearest such point.
+
+**The vias are walked in order with each one's segment as the next one's floor.** Array order is the route, so two vias that snapped out of order would make the leg double back—the same bow tie `viaInsertIndex()` exists to prevent, arriving by another door.
+
+**It reports whether anything moved, and a move marks the ride dirty.** The edit that triggered the route already did, but the autosave is on a three-second timer and a fast response can land after that save has gone, which would leave the snapped coordinates unsaved with nothing to say so.
+
 ## The export filename carries four fields and no more
 
 The convention exists because GPX and KML cannot hold a **date**, and that is the field doing the work. The recurring temptation is to keep adding fields—roles, colors, dwell—which turns a filename into a second, weaker serialization format competing with Routeloop JSON. Visibility and timezone are excluded specifically: a file named `public` that publishes a ride on import is a footgun, and a filename claiming a zone would invent one.

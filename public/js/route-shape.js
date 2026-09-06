@@ -78,6 +78,73 @@
     return best;
   }
 
+  // Where on a routed road does a shaping point actually sit?
+  //
+  // A shaping point is dropped wherever the rider's pointer lands, which is a
+  // coordinate in a field, on a river, or fifty meters into the wrong side of a
+  // divided highway. Routes then snaps it to WHATEVER road is nearest and routes
+  // through that — so the road that comes back can be a frontage road, the
+  // opposite carriageway, or an entirely different street, and the handle left
+  // sitting in the field says nothing about which. The rider sees a route that
+  // does not match the hint they gave and has no way to tell why.
+  //
+  // The fix is free, because the answer is already in hand: the routed geometry
+  // IS the road Google chose, so projecting the dropped point onto it gives the
+  // coordinate the router actually used. Nothing new is requested and no second
+  // API is spoken — see the note in builder.js's computeLeg for why this runs
+  // after the response rather than before the request.
+  //
+  // PROJECTED ONTO THE NEAREST SEGMENT, NOT SNAPPED TO THE NEAREST VERTEX. A
+  // routed polyline is sparse on a long straight — vertices can be miles apart
+  // on an interstate — so a vertex snap can move a handle further than the
+  // original error and put it past an interchange the rider was aiming at. The
+  // perpendicular foot is on the road either way and is the nearest such point.
+  //
+  // `fromSegment` is the order floor. Vias are sent to the router in array order
+  // and the order IS the route, so two of them that snap out of order make the
+  // leg double back — the bow tie viaInsertIndex exists to prevent, arriving by
+  // another door. Snapping each in turn from where the last one landed keeps the
+  // list monotonic along the road.
+  //
+  // Squared degrees with a cosine correction, for the reason nearestVertexIndex
+  // uses them: this ranks candidate segments against each other over a few
+  // miles, where a real haversine buys nothing and costs a trig call per vertex.
+  function snapToTrack(track, lngLat, fromSegment) {
+    if (!track || track.length < 2) return null;
+    const [lng, lat] = lngLat;
+    const k = Math.cos((lat * Math.PI) / 180);
+    const lo = Math.max(0, Math.min(fromSegment || 0, track.length - 2));
+    let best = null;
+    let bestD = Infinity;
+    for (let i = lo; i < track.length - 1; i++) {
+      const ax = track[i][0] * k;
+      const ay = track[i][1];
+      const bx = track[i + 1][0] * k;
+      const by = track[i + 1][1];
+      const vx = bx - ax;
+      const vy = by - ay;
+      const len2 = vx * vx + vy * vy;
+      // A zero-length segment is a duplicated vertex; its foot is the vertex.
+      const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((lng * k - ax) * vx + (lat - ay) * vy) / len2));
+      const px = ax + t * vx;
+      const py = ay + t * vy;
+      const dx = px - lng * k;
+      const dy = py - lat;
+      const d = dx * dx + dy * dy;
+      if (d < bestD) {
+        bestD = d;
+        best = {
+          // Back out of the cosine correction: the projection was done in a
+          // scaled x, so the longitude it produces is scaled too.
+          lngLat: [+(px / k).toFixed(6), +py.toFixed(6)],
+          segmentIndex: i,
+          t,
+        };
+      }
+    }
+    return best;
+  }
+
   // Where in a leg's existing via list does a newly dropped one belong?
   //
   // Vias are sent to the router in array order, so the order IS the route. Drop
@@ -239,6 +306,7 @@
   window.TBShape = {
     legAtVertex,
     nearestVertexIndex,
+    snapToTrack,
     viaInsertIndex,
     pointAtDistance,
     sliceBetween,

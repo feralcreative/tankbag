@@ -79,7 +79,7 @@
   const QUERY = window.TBQuery;
 
   // Pure drag-to-shape arithmetic — see route-shape.js.
-  const { legAtVertex, nearestVertexIndex, viaInsertIndex, pointAtDistance } = window.TBShape;
+  const { legAtVertex, nearestVertexIndex, viaInsertIndex, pointAtDistance, snapToTrack } = window.TBShape;
   const { sliceBetween, circlePath, haversineM, rejoinSpans } = window.TBShape;
 
   // Turning a SortableJS drop into a position in day.points — see drag-index.js.
@@ -1523,6 +1523,49 @@
     };
   }
 
+  // A SHAPING POINT IS PULLED ONTO THE ROAD THE ROUTER ACTUALLY CHOSE, and it
+  // happens AFTER the response rather than before the request. Ziad's call,
+  // 2026-09-06: a via is dropped wherever the pointer landed — in a field, on
+  // the wrong carriageway of a divided highway, on the frontage road beside the
+  // one the rider meant — and Routes snaps it to whatever is nearest and routes
+  // through that. So the road that comes back is not always the road the rider
+  // pointed at, the handle stays out in the field saying nothing about which
+  // one it is, and the exported track is the wrong road with no sign of why.
+  //
+  // The returned geometry IS the road, so projecting each via onto it costs
+  // nothing: no Roads API, no second credential, no request per drag. The
+  // trade-off to state rather than treat as a bug is that the HANDLE MOVES once
+  // the response lands — a correction after the fact, which is the price of
+  // doing it for free. Snapping before the request instead is Roads API
+  // snapToRoads, a billable call on every drag; see docs/decisions.md.
+  //
+  // Vias are walked IN ORDER with each one's segment as the next one's floor,
+  // because the array order is the route: two that snap out of order make the
+  // leg double back, which is the bow tie viaInsertIndex exists to prevent
+  // arriving by another door.
+  //
+  // It reports whether anything MOVED so the caller can mark the ride dirty.
+  // The edit that triggered the route already did — but the autosave is on a
+  // three-second timer and a fast response can land inside a window where the
+  // save has already gone, which would leave the snapped coordinates unsaved
+  // with nothing to say so.
+  function snapVias(leg) {
+    const vias = leg && leg.viaPoints;
+    if (!vias || !vias.length || !leg.geometry || leg.geometry.length < 2) return false;
+    let moved = false;
+    let floor = 0;
+    for (let i = 0; i < vias.length; i++) {
+      const hit = snapToTrack(leg.geometry, vias[i], floor);
+      if (!hit) break;
+      floor = hit.segmentIndex;
+      if (hit.lngLat[0] !== vias[i][0] || hit.lngLat[1] !== vias[i][1]) {
+        vias[i] = hit.lngLat;
+        moved = true;
+      }
+    }
+    return moved;
+  }
+
   // What to tell the rider when a leg does not come back.
   //
   // The leg is drawn straight either way — a placeholder beats no line at all —
@@ -1578,6 +1621,12 @@
         if (state.days[r] !== day) return;
         if (state.legSeq[r][i] !== seq || !day.legs[i]) return;
         day.legs[i] = leg;
+        // Onto the road, now that there is a road to be on. renderMarkers()
+        // rather than renderTrack() alone, because the handles are what move.
+        if (snapVias(leg)) {
+          renderMarkers();
+          markDirty();
+        }
         renderTrack(r);
         refreshDerived();
       })

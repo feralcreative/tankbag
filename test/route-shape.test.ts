@@ -98,6 +98,62 @@ describe('nearestVertexIndex', () => {
   })
 })
 
+describe('snapToTrack', () => {
+  // A due-east road along the equator, so degrees and meters stay legible.
+  const ROAD = [
+    [0, 0],
+    [0.01, 0],
+    [0.02, 0],
+  ]
+
+  it('pulls a point off the road onto the perpendicular foot', () => {
+    const hit = S.snapToTrack(ROAD, [0.005, 0.001], 0)
+    expect(hit.lngLat).toEqual([0.005, 0])
+    expect(hit.segmentIndex).toBe(0)
+  })
+
+  it('projects onto a segment rather than snapping to a vertex', () => {
+    // The nearest VERTEX is 0.01 away; the nearest point on the road is not.
+    const hit = S.snapToTrack(ROAD, [0.0151, 0.0005], 0)
+    expect(hit.lngLat).toEqual([0.0151, 0])
+    expect(S.nearestVertexIndex(ROAD, [0.0151, 0.0005])).toBe(2)
+  })
+
+  it('clamps to the ends rather than running off them', () => {
+    expect(S.snapToTrack(ROAD, [-0.5, 0.001], 0).lngLat).toEqual([0, 0])
+    expect(S.snapToTrack(ROAD, [0.5, 0.001], 0).lngLat).toEqual([0.02, 0])
+  })
+
+  it('leaves a point already on the road where it is', () => {
+    const hit = S.snapToTrack(ROAD, [0.015, 0], 0)
+    expect(hit.lngLat).toEqual([0.015, 0])
+  })
+
+  it('honors the order floor, so two vias cannot swap', () => {
+    // Both drops are nearest the FIRST segment, but the second must not be
+    // allowed to land behind the first — that is the bow tie.
+    const first = S.snapToTrack(ROAD, [0.006, 0.001], 0)
+    const second = S.snapToTrack(ROAD, [0.004, 0.001], first.segmentIndex)
+    expect(second.lngLat[0]).toBeGreaterThanOrEqual(0.004)
+    expect(second.segmentIndex).toBeGreaterThanOrEqual(first.segmentIndex)
+  })
+
+  it('survives a duplicated vertex', () => {
+    const withDup = [
+      [0, 0],
+      [0.01, 0],
+      [0.01, 0],
+      [0.02, 0],
+    ]
+    expect(S.snapToTrack(withDup, [0.01, 0.001], 0).lngLat).toEqual([0.01, 0])
+  })
+
+  it('has nothing to say about a track with fewer than two vertices', () => {
+    expect(S.snapToTrack([], [0, 0], 0)).toBe(null)
+    expect(S.snapToTrack([[0, 0]], [0, 0], 0)).toBe(null)
+  })
+})
+
 describe('viaInsertIndex', () => {
   const span = { startIndex: 0, endIndex: 30 }
 
