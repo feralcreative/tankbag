@@ -2776,10 +2776,22 @@
   white-space: nowrap;
 
   input {
-    // Wide enough for three digits and the spinner, and NO wider: this sits
-    // beside the panel's primary action and a field that reads as the same
-    // weight as the button competes with it.
-    width: 3.6em;
+    // THE SPINNER IS WHAT EATS THIS, and 3.6em did not allow for it — the box
+    // was sized as though the digits had it to themselves, so Chrome's
+    // inner-spin-button took about a third of the content width off the right
+    // and clipped a two-digit number. Reported 2026-09-06.
+    //
+    // `em` here is the label's 0.8em, so this is smaller than it reads: 5em is
+    // about 56px, of which the spinner takes roughly 15 and the padding and
+    // border 9. That leaves comfortable room for the 200 the clamp allows,
+    // which is the widest value that can ever be in it.
+    //
+    // `flex: none` because this is a flex child with an explicit width, which
+    // defaults to `flex: 0 1 auto` and is therefore still SHRINKABLE — the
+    // width is a basis to be squeezed from rather than a size, and the first
+    // narrow viewport would take back what this line just gave.
+    flex: none;
+    width: 5em;
     padding: 0.15em 0.3em;
     font-size: 1em;
     text-align: right;
