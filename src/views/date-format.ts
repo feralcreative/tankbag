@@ -30,7 +30,7 @@
 // anyone can see. `fmtNumber` exists for the day a member like `de-DE` (1.234)
 // lands, which is when that churn starts buying something.
 //
-// THREE MEMBERS, ONE PER DIGIT ORDER, not a catalogue of locales. Verified
+// THREE MEMBERS, ONE PER DIGIT ORDER, not a catalog of locales. Verified
 // against Intl rather than assumed:
 //
 //   en-US  8/24/2026    Monday, August 24    9:05 AM

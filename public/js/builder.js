@@ -725,7 +725,7 @@
   // this fires for nothing. It used to cover the slider's "All days" position,
   // where every day-level control was live but had nowhere to act.
   function noDayYet() {
-    toast("Add a day first", true);
+    toast("Add a route first", true);
   }
 
   // Undo/redo and the crash draft. The logic lives in builder-history.js so it
@@ -1088,7 +1088,7 @@
       // presence strip is seen by everybody in the ride.
       el.textContent =
         others.length === 1
-          ? others[0].name + (others[0].dayUid ? " is editing a day" : " is here")
+          ? others[0].name + (others[0].dayUid ? " is editing a route" : " is here")
           : others.length + " other riders here";
       el.title = others.map((r) => r.name).join(", ");
     }
@@ -1532,7 +1532,7 @@
   // A SHAPING POINT IS PULLED ONTO THE ROAD THE ROUTER ACTUALLY CHOSE, and it
   // happens AFTER the response rather than before the request. Ziad's call,
   // 2026-09-06: a via is dropped wherever the pointer landed — in a field, on
-  // the wrong carriageway of a divided highway, on the frontage road beside the
+  // the wrong side of a divided highway, on the frontage road beside the
   // one the rider meant — and Routes snaps it to whatever is nearest and routes
   // through that. So the road that comes back is not always the road the rider
   // pointed at, the handle stays out in the field saying nothing about which
@@ -2248,7 +2248,7 @@
     // The last stop of a day cannot be demoted: the day would have none, the
     // save would 400, and payload() would drop the day whole.
     if (kind === "poi" && stopsOf(day).length <= 1) {
-      return toast("A day needs at least one stop", true);
+      return toast("A route needs at least one stop", true);
     }
     beginEdit(kind === "stop" ? "make a stop" : "make a POI");
     pt.kind = kind;
@@ -2529,8 +2529,8 @@
   }
 
   function addDay() {
-    if (state.days.length >= MAX_DAYS) return toast("Day limit reached (" + MAX_DAYS + ")", true);
-    beginEdit("add day");
+    if (state.days.length >= MAX_DAYS) return toast("Route limit reached (" + MAX_DAYS + ")", true);
+    beginEdit("add route");
     // THE LAST DAY THAT COUNTS, not the last section on screen. If the ride ends
     // with a pair of alternates, the last row might be the one the rider decided
     // against — seeding from it would start the new day at the wrong place and,
@@ -2593,12 +2593,12 @@
   function splitDayHere(r, i) {
     const day = state.days[r];
     if (!day) return;
-    if (state.days.length >= MAX_DAYS) return toast("Day limit reached (" + MAX_DAYS + ")", true);
+    if (state.days.length >= MAX_DAYS) return toast("Route limit reached (" + MAX_DAYS + ")", true);
     if (!SPLIT.canSplitAt(day, i)) {
-      return toast("A day has to keep at least one leg on each side of a split", true);
+      return toast("A route has to keep at least one leg on each side of a split", true);
     }
 
-    beginEdit("split day");
+    beginEdit("split route");
     const cut = SPLIT.splitDayAt(day, i, uid);
 
     // A COLOR THAT IS NOT ITS NEIGHBOR'S. Seeding off state.days.length the way
@@ -2629,10 +2629,10 @@
     // GUARDS BEFORE beginEdit, not after. All four of these functions had it the
     // other way round, so refusing to delete a ride's last day still pushed an
     // undo step — the rider then pressed undo and nothing visible happened.
-    if (state.days.length <= 1) return toast("A ride needs at least one day", true);
+    if (state.days.length <= 1) return toast("A ride needs at least one route", true);
     const r = editIndex();
     if (r == null) return noDayYet();
-    beginEdit("delete day");
+    beginEdit("delete route");
     state.days.splice(r, 1);
     state.legSeq.splice(r, 1);
     // Deleting one of a pair leaves a group of one, which is not a group. The
@@ -2682,7 +2682,10 @@
 
     const legCount = Math.max(0, day.points.length - 1);
     const turningOn = !(day.routePrefs && day.routePrefs[key]);
-    if (legCount > 12 && !window.confirm("Changing this re-routes all " + legCount + " legs of this day. Continue?")) {
+    if (
+      legCount > 12 &&
+      !window.confirm("Changing this re-routes all " + legCount + " legs of this route. Continue?")
+    ) {
       return;
     }
 
@@ -2726,12 +2729,12 @@
     const legCount = Math.max(0, day.points.length - 1);
     // "re-routes", not "re-days" — a find-and-replace during the 2026-08-09
     // routes→days rename caught this string, which a rider reads in a dialog.
-    if (legCount > 12 && !window.confirm("Reversing re-routes all " + legCount + " legs of this day. Continue?"))
+    if (legCount > 12 && !window.confirm("Reversing re-routes all " + legCount + " legs of this route. Continue?"))
       return;
 
     // Every guard and the confirm are behind us, so this is the first point at
     // which the day is certainly going to change.
-    beginEdit("reverse day");
+    beginEdit("reverse route");
     // REVERSE THE WHOLE LIST, both kinds. A POI has a place in the order now, and
     // a day ridden backwards passes its viewpoints in the opposite order too —
     // leaving them where they were would strand each one beside the wrong leg.
@@ -2830,7 +2833,7 @@
       ">Duplicate</button>";
     const pointBtns =
       '<label class="sel-move">Move to <select data-sel="move-to">' +
-      '<option value="">day…</option>' +
+      '<option value="">route…</option>' +
       state.days.map((_, r) => '<option value="' + r + '">' + esc(dayNumber(r)) + "</option>").join("") +
       "</select></label>";
     bar.hidden = false;
@@ -2857,7 +2860,7 @@
   // hand-writing a payload.
   function groupSelectedAsAlts() {
     const rows = selectedDays();
-    if (rows.length < 2) return toast("Pick at least two days", true);
+    if (rows.length < 2) return toast("Pick at least two routes", true);
     if (rows.some((r) => state.days[r].altGroup != null)) {
       return toast("One of those is already an alternative—ungroup it first", true);
     }
@@ -2880,7 +2883,7 @@
     refreshDerived();
     markDirty();
     if (gap) toast(gap, true);
-    else toast(rows.length + " days are now alternatives—only the first counts");
+    else toast(rows.length + " routes are now alternatives—only the first counts");
   }
 
   // The message for a group whose members do not start and end together, or null
@@ -2901,7 +2904,7 @@
       const e = ends[k];
       if (!e) continue;
       if (far(base.first, e.first) || far(base.last, e.last)) {
-        return "Those alternatives do not start and end in the same place—whichever you ride, the next day may not join up.";
+        return "Those alternatives do not start and end in the same place—whichever you ride, the next route may not join up.";
       }
     }
     return null;
@@ -2924,8 +2927,8 @@
   function deleteSelectedDays() {
     const rows = selectedDays();
     if (!rows.length) return;
-    if (rows.length >= state.days.length) return toast("A ride needs at least one day", true);
-    beginEdit("delete days");
+    if (rows.length >= state.days.length) return toast("A ride needs at least one route", true);
+    beginEdit("delete routes");
     // Descending, so each splice cannot shift the index of one still to come.
     [...rows].reverse().forEach((r) => {
       state.days.splice(r, 1);
@@ -2938,14 +2941,14 @@
     renderMarkers();
     refreshDerived();
     markDirty();
-    toast(rows.length + " days deleted");
+    toast(rows.length + " routes deleted");
   }
 
   function duplicateSelectedDays() {
     const rows = selectedDays();
     if (!rows.length) return;
-    if (state.days.length + rows.length > MAX_DAYS) return toast("Day limit reached (" + MAX_DAYS + ")", true);
-    beginEdit("duplicate days");
+    if (state.days.length + rows.length > MAX_DAYS) return toast("Route limit reached (" + MAX_DAYS + ")", true);
+    beginEdit("duplicate routes");
     // Descending again: each insertion shifts everything after it, and going
     // backwards means the indices still to come are untouched.
     [...rows].reverse().forEach((r) => {
@@ -2969,7 +2972,7 @@
     renderMarkers();
     refreshDerived();
     markDirty();
-    toast(rows.length + " days duplicated");
+    toast(rows.length + " routes duplicated");
   }
 
   // Rebuild a day's legs after some of its points have gone, keeping every leg
@@ -3130,10 +3133,10 @@
   // This is what "make an alternate" is built on: duplicate the day, change the
   // copy, then group the two. Grouping itself is a bulk action on a selection.
   function duplicateDay(r) {
-    if (state.days.length >= MAX_DAYS) return toast("Day limit reached (" + MAX_DAYS + ")", true);
+    if (state.days.length >= MAX_DAYS) return toast("Route limit reached (" + MAX_DAYS + ")", true);
     const src = state.days[r];
     if (!src) return;
-    beginEdit("duplicate day");
+    beginEdit("duplicate route");
     const copy = {
       ...src,
       title: src.title ? src.title + " (copy)" : "",
@@ -3202,7 +3205,7 @@
     renderMarkers();
     refreshDerived();
     markDirty();
-    toast(n + " days are separate days again");
+    toast(n + " routes are separate routes again");
   }
 
   function moveDay(dir) {
@@ -3212,7 +3215,7 @@
     // At either end there is nothing to do, and pushing an undo step for it
     // means the rider's next undo silently spends itself on a no-op.
     if (j < 0 || j >= state.days.length) return;
-    beginEdit("move day");
+    beginEdit("move route");
     const a = state.days;
     [a[r], a[j]] = [a[j], a[r]];
     const s = state.legSeq;
@@ -3249,7 +3252,7 @@
   // there is a name, the number alone when there is not.
   function dayLabel(r) {
     const name = dayName(r);
-    return name ? "Day " + dayNumber(r) + SEP + name : "Day " + dayNumber(r);
+    return name ? "Route " + dayNumber(r) + SEP + name : "Route " + dayNumber(r);
   }
 
   // EVERY DAY, RENDERED AT ONCE. This replaces renderSlider + renderDayEditing +
@@ -3590,7 +3593,7 @@
 
   const SUGGESTION_LABELS = {
     pending: "Waiting on the owner",
-    stale: "The day changed—needs redoing",
+    stale: "The route changed—needs redoing",
     accepted: "Accepted",
     discarded: "Not taken",
     withdrawn: "Withdrawn",
@@ -3641,7 +3644,7 @@
       esc(sg.authorName) +
       "</strong>" +
       '<span class="comment-on">on ' +
-      (dayNo >= 0 ? "day " + (dayNo + 1) : "a day that is gone") +
+      (dayNo >= 0 ? "route " + (dayNo + 1) : "a route that is gone") +
       "</span>" +
       '<span class="suggestion-state">' +
       esc(SUGGESTION_LABELS[sg.state] || sg.state) +
@@ -3682,16 +3685,16 @@
     bar.innerHTML =
       '<label class="visually-hidden" for="suggest-note">Why</label>' +
       '<textarea id="suggest-note" rows="2" maxlength="2000" placeholder="What you changed, and why (optional)"></textarea>' +
-      '<button class="btn btn-sm" type="submit">Suggest this day</button>';
+      '<button class="btn btn-sm" type="submit">Suggest this route</button>';
     host.appendChild(bar);
   }
 
   async function postSuggestion(note) {
     const day = editRoute();
-    if (!day) throw new Error("open a day first");
+    if (!day) throw new Error("open a route first");
     const body = payload();
     const proposed = body.days.find((d) => d.uid === day.uid);
-    if (!proposed) throw new Error("that day has nothing in it to suggest");
+    if (!proposed) throw new Error("that route has nothing in it to suggest");
     const res = await fetch("/api/rides/" + state.rideId + "/suggestions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -3714,7 +3717,7 @@
       // 409 is the stale case and is the one worth naming: the day moved under
       // the proposal, so there is nothing safe to apply.
       throw new Error(
-        res.status === 409 ? "that day has changed since—the suggestion needs redoing" : "that did not work",
+        res.status === 409 ? "that route has changed since—the suggestion needs redoing" : "that did not work",
       );
     }
     await loadSuggestions(true);
@@ -4031,8 +4034,8 @@
     return (
       '<select class="day-subgroup" data-day="' +
       r +
-      '" title="Which group rides this day"' +
-      ' aria-label="Group for day ' +
+      '" title="Which group rides this route"' +
+      ' aria-label="Group for route ' +
       dayNumber(r) +
       '">' +
       // "Everyone" is the null option and it is FIRST, because it is what every
@@ -4761,7 +4764,7 @@
   // pressed the button to get.
   const MEET_REASONS = {
     "one-group": "Add a second group—a meeting point needs at least two starting places.",
-    "no-days": "Give each group a day of its own, starting where that group starts.",
+    "no-days": "Give each group a route of its own, starting where that group starts.",
     // ITS OWN MESSAGE, because the old code answered this with "nowhere works"
     // and sent the planner hunting for a geometry problem in a ride whose real
     // state was that nobody had drawn a road yet. A meeting point is placed ON a
@@ -5177,7 +5180,7 @@
         note:
           "They now ride through it. Give " +
           esc(subgroupName(mainUid)) +
-          "’s day a date and time to line the other groups up with it.",
+          "’s route a date and time to line the other groups up with it.",
         arrival: null,
       };
     }
@@ -5321,7 +5324,7 @@
     // to cut out — everybody arrives and the day is over.
     if (i == null || !SPLIT.canSplitAt(day, i)) return "";
     if (state.days.length >= MAX_DAYS) {
-      return " The shared stretch is still part of " + esc(dayLabel(r)) + "—the ride is at its day limit.";
+      return " The shared stretch is still part of " + esc(dayLabel(r)) + "—the ride is at its route limit.";
     }
 
     beginEdit("split at the meeting point");
@@ -5362,7 +5365,7 @@
     renderMarkers();
     refreshDerived();
     markDirty();
-    return " The road after it is now a shared day everybody rides.";
+    return " The road after it is now a shared route everybody rides.";
   }
 
   const subgroupName = (uid) => {
@@ -5436,7 +5439,7 @@
     if (!el) return;
     const longest = longestApproach();
     if (!longest || state.meta.primarySubgroup === longest.uid) {
-      el.textContent = longest ? "" : "Give each group at least one day to see the effect.";
+      el.textContent = longest ? "" : "Give each group at least one route to see the effect.";
       return;
     }
     // NAMES THE GESTURE, because there is no longer a picker to point at: the
@@ -5499,7 +5502,7 @@
         (ghost ? "" : " is-on") +
         '" title="' +
         (ghost
-          ? "Not counted in the ride total. Use the day menu to ride this one instead."
+          ? "Not counted in the ride total. Use the route menu to ride this one instead."
           : "This is the route counted in the ride total.") +
         '">' +
         (ghost ? "alternative" : "riding this") +
@@ -5516,7 +5519,7 @@
       '" data-day="' +
       r +
       '"' +
-      (LIVE.heldBy[day.uid] ? ' title="' + esc(LIVE.heldBy[day.uid]) + ' is working on this day"' : "") +
+      (LIVE.heldBy[day.uid] ? ' title="' + esc(LIVE.heldBy[day.uid]) + ' is working on this route"' : "") +
       ' style="--day-color:' +
       esc(day.color) +
       '">' +
@@ -5545,12 +5548,12 @@
       // the grip focusable and giving it arrow keys covers both without spending
       // two more buttons of a 380px header.
       '<button type="button" class="day-drag" title="Drag to reorder, or focus and use the arrow keys"' +
-      ' aria-label="Reorder day ' +
+      ' aria-label="Reorder route ' +
       dayNumber(r) +
       ', use the up and down arrow keys"></button>' +
       '<button type="button" class="day-twirl" aria-expanded="' +
       (shut ? "false" : "true") +
-      '" title="Show or hide this day\'s stops"><span class="day-twirl-mark" aria-hidden="true"></span></button>' +
+      '" title="Show or hide this route\'s stops"><span class="day-twirl-mark" aria-hidden="true"></span></button>' +
       // The ordinal, rendered rather than stored. Reordering re-renders, so it is
       // always the day's real position and there is nothing to keep in sync.
       '<span class="day-num" aria-hidden="true">' +
@@ -5558,7 +5561,7 @@
       "</span>" +
       '<input class="day-color" type="color" value="' +
       esc(day.color) +
-      '" title="Day color" aria-label="Color for ' +
+      '" title="Route color" aria-label="Color for ' +
       esc(dayLabel(r)) +
       '">' +
       // The placeholder no longer says "Day N". It used to, which made an empty
@@ -5580,7 +5583,7 @@
       // and Bitwarden each have their own, and none of them has been reported
       // here.
       '<input class="day-title" type="text" maxlength="150" placeholder="Name this day (optional)"' +
-      ' autocomplete="off" data-1p-ignore aria-label="Name for day ' +
+      ' autocomplete="off" data-1p-ignore aria-label="Name for route ' +
       dayNumber(r) +
       '" value="' +
       esc(day.title) +
@@ -5615,7 +5618,7 @@
       '<input class="day-start" type="datetime-local"></label>' +
       '<label class="day-time"><span>Ends</span>' +
       '<input class="day-end" type="datetime-local"' +
-      ' title="Worked out from the start time and the day\'s riding and stops. Type your own to override, or clear it to go back to automatic."></label>' +
+      ' title="Worked out from the start time and the route\'s riding and stops. Type your own to override, or clear it to go back to automatic."></label>' +
       '<span class="day-times-note"></span>' +
       "</div>" +
       prefsHtml(r, day) +
@@ -5638,9 +5641,9 @@
   // such notion: that is #28, and it works by scoring the alternates Routes
   // returns rather than by asking for anything.
   const AVOID_PREFS = [
-    { key: "avoidHighways", label: "Highways", hint: "Route this day off the interstate where there is another way" },
-    { key: "avoidTolls", label: "Tolls", hint: "Avoid toll roads and bridges on this day" },
-    { key: "avoidFerries", label: "Ferries", hint: "Keep this day on roads the bike can ride onto" },
+    { key: "avoidHighways", label: "Highways", hint: "Route this one off the interstate where there is another way" },
+    { key: "avoidTolls", label: "Tolls", hint: "Avoid toll roads and bridges on this route" },
+    { key: "avoidFerries", label: "Ferries", hint: "Keep this route on roads the bike can ride onto" },
   ];
 
   // #28. A SEPARATE GROUP BECAUSE IT IS A DIFFERENT VERB. Four toggles under one
@@ -5652,7 +5655,7 @@
     {
       key: "preferTwisty",
       label: "Twisty roads",
-      hint: "Compare the routes Google offers for this day and take the twistiest",
+      hint: "Compare the roads Google offers for this route and take the twistiest",
     },
   ];
 
@@ -5731,8 +5734,8 @@
     const what = spec.label.toLowerCase();
     const width = Math.round(window.TBUnits.distanceFromMiles(CORRIDOR_MI, UNITS)) + " " + distUnit;
     if (isSlot)
-      return "No " + what + " within " + width + " of this leg. Add it from the bottom of the day to search wider.";
-    if (state.corridorOn) return "No " + what + " within " + width + " of this day's route.";
+      return "No " + what + " within " + width + " of this leg. Add it from the bottom of the route to search wider.";
+    if (state.corridorOn) return "No " + what + " within " + width + " of this route.";
     return "No " + what + " on screen. Pan or zoom out to look wider.";
   }
 
@@ -5990,7 +5993,7 @@
     }
     let what;
     if (a.dayIndex == null) {
-      what = "between days";
+      what = "between routes";
     } else if (a.legIndex != null) {
       what = dayLabel(a.dayIndex) + SEP + "leg " + (a.legIndex + 1) + " of " + state.days[a.dayIndex].legs.length;
     } else {
@@ -6056,7 +6059,9 @@
     // Day is filled, Ride is not.
     const onDay = state.timeScope === "day";
     btn.textContent = onDay ? "Day" : "Ride";
-    btn.title = onDay ? "Scrubbing this day. Switch to the whole ride" : "Scrubbing the whole ride. Switch to this day";
+    btn.title = onDay
+      ? "Scrubbing this route. Switch to the whole ride"
+      : "Scrubbing the whole ride. Switch to this route";
     btn.setAttribute("aria-label", btn.title);
     // Pressed is the DEFAULT here, which is unusual and deliberate: it tracks
     // the label rather than the non-default state, so the filled look and the
@@ -6124,7 +6129,7 @@
     if (day.endManual) {
       note.textContent = "end set by hand";
     } else {
-      note.textContent = routeTotals(day).estimated ? "end estimated from the day" : "end from the day";
+      note.textContent = routeTotals(day).estimated ? "end estimated from the route" : "end from the route";
     }
   }
 
@@ -6307,7 +6312,7 @@
       '" data-i="' +
       i +
       '">' +
-      "Sleeping here? End the day" +
+      "Sleeping here? End the route" +
       "</button></div>"
     );
   }
@@ -6910,7 +6915,7 @@
   function chipTitle(c, isSlot) {
     const what = c.label.toLowerCase();
     if (isSlot) return "Find " + what + " along this leg";
-    return "Find " + what + (state.corridorOn ? " anywhere along this day" : " on the part of the map you can see");
+    return "Find " + what + (state.corridorOn ? " anywhere along this route" : " on the part of the map you can see");
   }
 
   function chipsHtml(r, full, at) {
@@ -6980,7 +6985,7 @@
     return (
       '<div class="add-corridor" role="group" aria-label="Where to search">' +
       opt(false, "On screen", "Search the part of the map you can see") +
-      opt(true, "Along the day", "Search the whole day, within " + width + " of the route") +
+      opt(true, "Along the route", "Search the whole route, within " + width + " of the route") +
       "</div>"
     );
   }
@@ -7127,7 +7132,7 @@
       // three days and two alternates is a three-day ride, and saying "5 days"
       // beside a mileage that only covers three would make both look wrong.
       counted.length +
-      " days" +
+      " routes" +
       SEP +
       line(ride, true) +
       "</span>" +
@@ -7333,7 +7338,7 @@
         // and payload() drops the whole day for. Same guard setPointKind applies
         // to an explicit demote, reached from a different direction.
         if (last && point.kind === "stop" && stopsOf(day).length <= 1) {
-          return toast("A day needs at least one stop—give this one a category or make another a stop", true);
+          return toast("A route needs at least one stop—give this one a category or make another a stop", true);
         }
         if (!removing && point.roles.length >= 4) return toast("Up to 4 categories per point", true);
 
@@ -7418,7 +7423,7 @@
     // than hidden, because "why can I not split here" is worth answering in
     // place — splitting at the first or last point would leave a day with one
     // point and no legs, which the API refuses and payload() drops whole.
-    { act: "split", label: "End the day here" },
+    { act: "split", label: "End the route here" },
     { act: "up", label: "Move up" },
     { act: "down", label: "Move down" },
     { act: "delete", label: "Delete", danger: true },
@@ -7432,11 +7437,11 @@
   // extras: without them a rider can put days into a group and has no way back
   // out, and no way to change their mind about which one they are riding.
   const DAY_MENU_ITEMS = [
-    { act: "day-duplicate", label: "Duplicate day" },
-    { act: "day-select", label: "Select days…" },
+    { act: "day-duplicate", label: "Duplicate route" },
+    { act: "day-select", label: "Select routes…" },
     { act: "day-promote", label: "Ride this one instead", when: (d) => d.altGroup != null && !d.altActive },
     { act: "day-ungroup", label: "Ungroup alternatives", when: (d) => d.altGroup != null },
-    { act: "day-delete", label: "Delete day", danger: true },
+    { act: "day-delete", label: "Delete route", danger: true },
   ];
 
   // Which button opened the menu that is currently up, so Escape can put focus
@@ -7713,7 +7718,7 @@
         const from = evt.oldIndex;
         const to = evt.newIndex;
         if (from === to || from == null || to == null) return;
-        beginEdit("reorder days");
+        beginEdit("reorder routes");
         const [day] = state.days.splice(from, 1);
         state.days.splice(to, 0, day);
         const [seq] = state.legSeq.splice(from, 1);
@@ -7762,7 +7767,7 @@
     if (!moving) return;
     const kind = moving.kind;
 
-    beginEdit("move " + (kind === "stop" ? "stop" : "POI") + " between days");
+    beginEdit("move " + (kind === "stop" ? "stop" : "POI") + " between routes");
 
     const srcLegs = src.legs;
     const srcPoints = src.points.length;
@@ -8159,7 +8164,7 @@
         // about 745 miles the samples stop touching even at the raised cap, and
         // the honest thing is to name the gap rather than let the rider draw the
         // wrong conclusion from it. See MAX_CORRIDOR_SAMPLES.
-        (corridorPartial ? ' <span class="hit-partial">part of this day only—zoom in and use On screen</span>' : "") +
+        (corridorPartial ? ' <span class="hit-partial">part of this route only—zoom in and use On screen</span>' : "") +
         "</li>" +
         hits
           .map(
@@ -8836,7 +8841,7 @@
     const dropped = state.days.length - body.days.length;
     if (dropped > 0 && !warnedDropped) {
       warnedDropped = true;
-      toast(dropped + " empty day" + (dropped > 1 ? "s" : "") + " not saved—add a stop to it");
+      toast(dropped + " empty route" + (dropped > 1 ? "s" : "") + " not saved—add a stop to it");
     } else if (dropped === 0) {
       warnedDropped = false;
     }
@@ -9205,7 +9210,7 @@
       const day = state.days[r];
       if (!day) return;
       if (e.target.classList.contains("day-color")) {
-        beginEdit("recolor day", "day-color:" + r);
+        beginEdit("recolor route", "day-color:" + r);
         day.color = e.target.value;
         sec.style.setProperty("--day-color", day.color);
         renderRailDays();
@@ -9215,7 +9220,7 @@
         return;
       }
       if (e.target.classList.contains("day-title")) {
-        beginEdit("rename day", "day-title:" + r);
+        beginEdit("rename route", "day-title:" + r);
         day.title = e.target.value;
         // Deliberately NOT renderDays(): rebuilding the section would take the
         // caret out of the field being typed in.
@@ -9233,7 +9238,7 @@
       const day = state.days[r];
       if (!day) return;
       if (e.target.classList.contains("day-subgroup")) {
-        beginEdit("change which group rides a day");
+        beginEdit("change which group rides a route");
         // "" is the Everyone option, and null is what the payload carries — an
         // empty string would reach the server as a uid that matches nothing and
         // be resolved to null anyway, but silently and one layer too late.

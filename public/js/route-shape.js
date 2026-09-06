@@ -84,7 +84,7 @@
   // coordinate in a field, on a river, or fifty meters into the wrong side of a
   // divided highway. Routes then snaps it to WHATEVER road is nearest and routes
   // through that — so the road that comes back can be a frontage road, the
-  // opposite carriageway, or an entirely different street, and the handle left
+  // opposite side of a divided highway, or an entirely different street, and the handle left
   // sitting in the field says nothing about which. The rider sees a route that
   // does not match the hint they gave and has no way to tell why.
   //

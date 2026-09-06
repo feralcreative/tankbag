@@ -150,8 +150,8 @@
     if (zips > 0) {
       out.push(
         zips === 1
-          ? "One archive—its days are read when it uploads, so it cannot be reviewed here."
-          : zips + " archives—their days are read when they upload, so they cannot be reviewed here.",
+          ? "One archive—its routes are read when it uploads, so it cannot be reviewed here."
+          : zips + " archives—their routes are read when they upload, so they cannot be reviewed here.",
       );
     }
     var plain = rows.filter(function (r) {
@@ -160,11 +160,11 @@
     if (plain > 0 && !plan.allConforming) {
       out.push(
         plain === rows.length
-          ? "These do not follow the naming convention, so nothing was read off them. Name the days below."
+          ? "These do not follow the naming convention, so nothing was read off them. Name the routes below."
           : "Some of these do not follow the naming convention. What was read off the rest is filled in below.",
       );
     }
-    if (plan.reordered) out.push("Reordered by day number.");
+    if (plan.reordered) out.push("Reordered by route number.");
     if (plan.rideConflict) out.push("Heads up: these files name different rides. They will import as one.");
     if (Object.keys(duplicateNames()).length > 0) {
       out.push("Two files with the same name—check you did not add one twice.");
@@ -179,7 +179,7 @@
       .map(function (r) {
         return r.date;
       });
-    if (dates.length > 1 && new Set(dates).size !== dates.length) out.push("Two days share a date.");
+    if (dates.length > 1 && new Set(dates).size !== dates.length) out.push("Two routes share a date.");
     return out;
   }
 
@@ -201,7 +201,7 @@
       // operated from a keyboard at all.
       '<span class="plan-grip" aria-hidden="true">⠿</span>' +
       '<span class="plan-day">' +
-      (r.zip ? "—" : "Day " + (i + 1)) +
+      (r.zip ? "—" : "Route " + (i + 1)) +
       "</span>" +
       (r.zip
         ? '<span class="plan-zip-name">' + esc(r.name) + "</span>"
@@ -299,7 +299,7 @@
     var zips = rows.filter(function (r) {
       return r.zip;
     }).length;
-    submit.textContent = zips > 0 ? SUBMIT_LABEL : "Import " + days + (days === 1 ? " day" : " days");
+    submit.textContent = zips > 0 ? SUBMIT_LABEL : "Import " + days + (days === 1 ? " route" : " routes");
   }
 
   // Re-render without re-reading the files, for an edit that changed the model.

@@ -372,7 +372,7 @@ describe('proposeGroupMeet', () => {
   // forecourt is somewhere you can actually wait, so a station on the road beats
   // the anonymous stretch of highway it snapped to.
   it('offers a station as itself, not as the road vertex beside it', () => {
-    // A few hundred metres north of the main group's line, which is inside
+    // A few hundred meters north of the main group's line, which is inside
     // ON_ROUTE_M, so it snaps to the road for ranking and keeps its own place.
     const station: FuelCandidate = {
       at: [-120.5, 40.004],
@@ -389,7 +389,7 @@ describe('proposeGroupMeet', () => {
     expect(fuel).toBeTruthy()
     // Nothing BUT stations under that flag.
     expect(out.every((m) => m.isFuel)).toBe(true)
-    // THE FORECOURT, not the carriageway: a rider sent to a station has to be
+    // THE FORECOURT, not the highway: a rider sent to a station has to be
     // sent to the station.
     expect(fuel!.at).toEqual([-120.5, 40.004])
     expect(fuel!.name).toBe('Shell')

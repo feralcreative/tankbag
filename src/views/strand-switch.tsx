@@ -30,7 +30,7 @@ export function StrandSwitch({ strand, base, extra = '' }: { strand: Strand; bas
       <p class="strand-who">
         {mine ? (
           <>
-            Your copy — <strong>{mine.name}</strong>. Your own approach and the days everyone rides.
+            Your copy — <strong>{mine.name}</strong>. Your own approach and the routes everyone rides.
           </>
         ) : (
           <>

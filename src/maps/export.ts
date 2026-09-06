@@ -723,7 +723,7 @@ export async function loadNativeRide(
       // route, and a file that lost it would restore as a pile of unrelated
       // days. Who is in it is a set of accounts on this installation, which
       // means nothing in somebody else's file and would be a roster of real
-      // people travelling in an export. `ride_members` is deliberately not
+      // people traveling in an export. `ride_members` is deliberately not
       // serialized anywhere.
       subgroups: groups.map((g) => ({ uid: g.uid, name: g.name, color: g.color })),
       primarySubgroup: primaryUid,

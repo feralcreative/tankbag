@@ -35,7 +35,7 @@ export const BR_EXT = '.br'
  * A ceiling on what one file may decompress to.
  *
  * These are files this app wrote, not attacker-supplied archives, so this is not
- * the defence that `src/maps/zip.ts` needs on the way in — it is a guard against
+ * the defense that `src/maps/zip.ts` needs on the way in — it is a guard against
  * a corrupt or hand-edited file turning a download into an out-of-memory. Set
  * from the import body limit rather than invented: nothing larger than that
  * could have been stored in the first place.

@@ -52,7 +52,7 @@ const FIXTURES: [string, Track][] = [
   ['a mountain curve', arc(200, 180)],
   ['a sweeper', arc(400, 180)],
   ['a gentle sweeper', arc(800, 180)],
-  ['a motorway bend', arc(1500, 180)],
+  ['a freeway bend', arc(1500, 180)],
   ['a short straight', straight(5000)],
   ['a long straight', straight(200000)],
   ['a full circle', arc(300, 360)],

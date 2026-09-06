@@ -1196,7 +1196,7 @@
     flex: 1 1 auto;
     // NUDGED DOWN, AND THE NUDGE IS TWO THINGS. `align-items: center` centers
     // BOXES, and the dot and the × are boxes whose ink fills them — so both land
-    // dead centre. Text does not: its box is the line box, and Overpass puts
+    // dead center. Text does not: its box is the line box, and Overpass puts
     // more of the half-leading below the baseline than above, so the ink sits
     // high inside a box that is itself perfectly centred. That measured at
     // 0.045em. The rest of the way to 0.15em is OPTICAL: the eye centres a word

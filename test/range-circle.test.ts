@@ -236,7 +236,7 @@ describe('pumps the rider has not reached yet', () => {
 
   it('ignores a pump the binding bike cannot use when walking forward', () => {
     const d = testRide()
-    // An electric bike passes both petrol pumps having refuelled nothing.
+    // An electric bike passes both gas pumps having refueled nothing.
     expect(round(R.dryDistanceM(d, 0, cum(d), 'charge', mi(110)))).toBe(110)
   })
 })

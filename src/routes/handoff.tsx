@@ -34,11 +34,15 @@ const fmtMi = (m: number) => (m / METERS_PER_MILE).toFixed(1)
 // the nav app has, against how many times they have to stop and tap. The labels
 // say that; the numbers behind them are an implementation detail.
 const DENSITIES = [
-  { key: 'off', label: 'Stops only', points: 0, note: 'Hands over your stops and lets Maps pick the roads between them' },
+  {
+    key: 'off',
+    label: 'Stops only',
+    points: 0,
+    note: 'Hands over your stops and lets Maps pick the roads between them',
+  },
   { key: 'light', label: 'Light', points: 25, note: 'Holds the shape of the route with a few extra links' },
   { key: 'tight', label: 'Tight', points: 60, note: 'Pins it down closely, at the cost of more links' },
 ] as const
-
 
 const densityOf = (raw: string | undefined): (typeof DENSITIES)[number] =>
   DENSITIES.find((d) => d.key === raw) ?? DENSITIES[1]
@@ -124,9 +128,9 @@ handoffRoutes.get('/m/:slug/navigate', async (c) => {
             const day = days[dayIndex]
             return (
               <section class="ho-day">
-                <h2>{day.title?.trim() || `Day ${dayIndex + 1}`}</h2>
+                <h2>{day.title?.trim() || `Route ${dayIndex + 1}`}</h2>
                 {day.links.length === 0 ? (
-                  <p class="ho-empty">Nothing to navigate—this day has no stops yet.</p>
+                  <p class="ho-empty">Nothing to navigate—this route has no stops yet.</p>
                 ) : (
                   <ol class="ho-links">
                     {day.links.map((link) => (
@@ -137,7 +141,10 @@ handoffRoutes.get('/m/:slug/navigate', async (c) => {
                         <p class="ho-stops">
                           {link.points.map((p) => p.name || 'Unnamed stop').join(' → ')}
                           {link.shaping > 0 && (
-                            <span class="ho-shaping">{SEP}{link.shaping} points holding the route</span>
+                            <span class="ho-shaping">
+                              {SEP}
+                              {link.shaping} points holding the route
+                            </span>
                           )}
                         </p>
                       </li>
@@ -152,7 +159,7 @@ handoffRoutes.get('/m/:slug/navigate', async (c) => {
             <h2>What this does not promise</h2>
             <ul>
               <li>
-                Maps carries nine waypoints per link. That is the reason a day is several links, and the reason the
+                Maps carries nine waypoints per link. That is the reason a route is several links, and the reason the
                 distance above is not zero.
               </li>
               <li>

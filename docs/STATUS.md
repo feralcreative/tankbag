@@ -74,9 +74,9 @@ Six things were listed as still rough on [#239](https://github.com/feralcreative
 
 **Not verified against the live proposer.** The meeting-point work was exercised end to end with the server response stubbed in the browser, and the group form with the Places SDK faked at the boundary—both deliberately, because a real press spends Routes and Places requests on Ziad's key. **The real `POST /api/rides/:id/rendezvous` has never been called with the new per-group shape.** ~~That is the first thing to do tomorrow~~—**done 2026-09-05, and it was wrong in exactly the way predicted**: every joining group was being handed the same starting point. See the 2026-09-05 section above.
 
-## A day becomes a route—decided 2026-09-04, not started
+## A day becomes a route—decided 2026-09-04, copy half shipped 2026-09-06
 
-**Decided in a dialog, no code written.** The plan is `_PLANS/day-to-route-rename.md` (gitignored). With three groups the first three routes are fractions of one calendar day—feeders converging within a couple of hours—so "day" describes none of them.
+**The rider-facing copy is DONE as of 2026-09-06; the identifier and schema half is not started.** The plan is `_PLANS/day-to-route-rename.md` (gitignored). With three groups the first three routes are fractions of one calendar day—feeders converging within a couple of hours—so "day" describes none of them.
 
 - What is now a **day** is a **route**. A ride is still a ride.
 - "Day" survives for the **calendar sense only**: a real date in the roadbook or the timeline readout. Nothing in the model is a day.
@@ -84,6 +84,12 @@ Six things were listed as still rough on [#239](https://github.com/feralcreative
 - Scope is **everything, schema included**: `days` → `routes`, `day_id` → `route_id`, native JSON v6 with v5 still importing, export filename field `day-2` → `route-2` with `day-` still read.
 
 **Measured blast radius:** ~2,170 identifier hits in `public/js`, ~1,446 in `src`, ~1,167 in `test`, ~359 in `style`, 119 in `schema.ts` alone. **One decision is still open and blocks the start:** expand/contract makes a table rename a dual-write across the whole graph, against one `utils/deploy/prod.sh --no-overlap` deploy with a few seconds of real downtime. Three riders hold accounts. That is Ziad's call.
+
+**What shipped 2026-09-06—copy only, no schema, no wire format, no identifiers.** Every string a rider reads now says route: the builder panel and its whole row menu, every undo label, the toasts, the viewer legend and its totals, the roadbook, the hand-off page, the import page and its review table, the FAQ, privacy, terms, `/brand`, the dashboard tiles and records, and the roster's ballot. **Two things were deliberately left alone and are Ziad's call**: the splash heading *Every day. Every detail.* and the dashboard lede *Plan a multi-day ride on one map*—both are taglines rather than vocabulary, and both read as the calendar sense.
+
+**Past release notes were NOT retconned.** They are a record of what shipped, so they still say day; a new note at the top announces the change instead. Same treatment this document gives the 2026-08-09 rename in the other direction.
+
+**The two registers now disagree on purpose, and AGENTS.md says so.** Code, columns, class names, `data-` attributes and test fixtures keep `day`; copy says route. `test/stats-shape.test.ts` was the only test pinning a rider-facing string and it moved with them. A `#one-file-per-day` FAQ anchor stays as it is—`test/content.test.ts` pins it and the deep link is in `viewer.js`.
 
 **A naming collision to settle with it:** `src/routes/` already means HTTP route modules. The proposal is that the table is `routes`, imported as `routesTable` (the existing `pointsTable`/`daysTable` convention already avoids the bare name), and the directory keeps its meaning—renaming it doubles the diff for no gain.
 

@@ -300,7 +300,7 @@ function Ballot({
         {g.tallies.map((t) => (
           <li class={t.active ? 'is-active' : ''}>
             <span class="ballot-day">
-              {dayTitles.get(t.uid) || 'Untitled day'}
+              {dayTitles.get(t.uid) || 'Untitled route'}
               {t.active && <span class="roster-role">Riding this</span>}
             </span>
             {/* A count of zero is still shown here, unlike hasVotes above.
@@ -554,7 +554,7 @@ const ERRORS: Record<string, string> = {
   full: 'This ride is full.',
   'unknown-rider': 'No such rider.',
   closed: 'Voting has closed on this ride.',
-  'not-an-alternate': 'That day is not one of a set of alternatives.',
+  'not-an-alternate': 'That route is not one of a set of alternatives.',
   refused: 'That is not something you can do here.',
 }
 
@@ -599,8 +599,7 @@ rosterRoutes.post('/m/:slug/riders/perm', requireActive, requireSameOrigin, asyn
   if (!found) return c.text('Not found', 404)
   const form = await c.req.parseBody()
   const rider = Number(form.rider)
-  const ok =
-    Number.isInteger(rider) && isPerm(form.perm) && (await setPerm(found.ride.id, user.id, rider, form.perm))
+  const ok = Number.isInteger(rider) && isPerm(form.perm) && (await setPerm(found.ride.id, user.id, rider, form.perm))
   return c.redirect(back(found.ride.slug, ok ? undefined : 'refused'), 303)
 })
 

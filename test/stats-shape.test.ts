@@ -347,7 +347,7 @@ describe('shapeStats', () => {
 
   it('uses singular labels for one of a thing', () => {
     const s = shapeStats(raw({ totals: totals({ rides: 1, days: 1, legs: 1, points: 1 }) }), 0, NOW)
-    expect(s.tiles.map((t) => t.label)).toEqual(['ride', 'day', 'leg', 'waypoint'])
+    expect(s.tiles.map((t) => t.label)).toEqual(['ride', 'route', 'leg', 'waypoint'])
   })
 
   it('only mentions shaping points when there are some', () => {
@@ -404,7 +404,7 @@ describe('shapeStats', () => {
       NOW,
     )
     const labels = s.records.map((x) => x.label)
-    expect(labels).toContain('Longest single day')
+    expect(labels).toContain('Longest single route')
     expect(s.records.find((x) => x.label === 'Twistiest 20 miles')?.value).toBe('Very twisty')
     expect(labels.some((l) => l.includes('12 times'))).toBe(true)
   })
@@ -414,7 +414,7 @@ describe('shapeStats', () => {
   // that re-joins them puts the emphasis back on the unit.
   it('hands the figure and its unit over separately', () => {
     const s = shapeStats(raw({ records: { ...raw().records, longestDayM: 420 * MI } }), 0, NOW)
-    const rec = s.records.find((x) => x.label === 'Longest single day')
+    const rec = s.records.find((x) => x.label === 'Longest single route')
     expect(rec?.value).toBe('420')
     expect(rec?.unit).toBe('mi')
     expect(rec?.numeric).toBe(true)
@@ -510,7 +510,7 @@ describe('shapeStats', () => {
       0,
       NOW,
     )
-    expect(s.records.find((x) => x.label === 'Longest single day')?.hint).toBe('Sierras')
+    expect(s.records.find((x) => x.label === 'Longest single route')?.hint).toBe('Sierras')
   })
 
   // A ride the thumbnail sweep has not reached, or one with no geometry to draw.
@@ -523,7 +523,7 @@ describe('shapeStats', () => {
       0,
       NOW,
     )
-    const rec = s.records.find((x) => x.label === 'Longest single day')
+    const rec = s.records.find((x) => x.label === 'Longest single route')
     expect(rec?.slug).toBe('abc')
     expect(rec?.thumbHash).toBeUndefined()
     expect('thumbHash' in (rec ?? {})).toBe(false)
@@ -534,7 +534,7 @@ describe('shapeStats', () => {
   // and defined.
   it('leaves the ride keys off a record that has none', () => {
     const s = shapeStats(raw({ records: { ...raw().records, longestDayM: 420 * MI } }), 0, NOW)
-    const rec = s.records.find((x) => x.label === 'Longest single day')
+    const rec = s.records.find((x) => x.label === 'Longest single route')
     expect('slug' in (rec ?? {})).toBe(false)
     expect('thumbHash' in (rec ?? {})).toBe(false)
   })
@@ -602,7 +602,7 @@ describe('the comparison columns', () => {
   it('gives all four counting tiles a spread', () => {
     const t = tilesFor(global)
     expect(t.rides.spread).toEqual({ avg: '6.7', top: '17' })
-    expect(t.days.spread).toEqual({ avg: '13', top: '34' })
+    expect(t.routes.spread).toEqual({ avg: '13', top: '34' })
     expect(t.legs.spread).toEqual({ avg: '44.3', top: '95' })
     expect(t.waypoints.spread).toEqual({ avg: '67.3', top: '154' })
   })

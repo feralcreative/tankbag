@@ -194,8 +194,15 @@ roadbookRoutes.get('/m/:slug/roadbook', async (c) => {
           <header class="rb-head">
             <h1>{m.title}</h1>
             <p class="rb-summary">
-              {ride.days.length} {ride.days.length === 1 ? 'day' : 'days'}{SEP}{fmtMi(totalM, units)} {distanceUnit(units)}
-              {totalS > 0 && <>{SEP}{fmtDuration(totalS)} riding</>}
+              {ride.days.length} {ride.days.length === 1 ? 'day' : 'days'}
+              {SEP}
+              {fmtMi(totalM, units)} {distanceUnit(units)}
+              {totalS > 0 && (
+                <>
+                  {SEP}
+                  {fmtDuration(totalS)} riding
+                </>
+              )}
             </p>
             {m.description && <p class="rb-note">{m.description}</p>}
             {/* A roadbook is a thing you print and carry, so which one you
@@ -204,7 +211,7 @@ roadbookRoutes.get('/m/:slug/roadbook', async (c) => {
             <StrandSwitch strand={strand} base={`/m/${m.slug}/roadbook`} />
             {anyClock && (
               <p class="rb-caveat">
-                Times are estimates: the day’s riding time spread evenly over its distance, plus the time planned at
+                Times are estimates: the route’s riding time spread evenly over its distance, plus the time planned at
                 each stop. Traffic, weather, and the way you actually ride are not in&nbsp;them.
               </p>
             )}
@@ -216,26 +223,37 @@ roadbookRoutes.get('/m/:slug/roadbook', async (c) => {
               <section class="rb-day">
                 <h2>
                   <span class="rb-day-swatch" style={`background:${r.color}`}></span>
-                  {r.title || `Day ${i + 1}`}
+                  {r.title || `Route ${i + 1}`}
                 </h2>
                 <p class="rb-day-meta">
-                  {r.startAt && <>{fmtDateLong(r.startAt, dateFormat)}{SEP}</>}
+                  {r.startAt && (
+                    <>
+                      {fmtDateLong(r.startAt, dateFormat)}
+                      {SEP}
+                    </>
+                  )}
                   {fmtMi(r.distanceM, units)} {distanceUnit(units)}
-                  {r.durationS > 0 && <>{SEP}{fmtDuration(r.durationS)} riding</>}
+                  {r.durationS > 0 && (
+                    <>
+                      {SEP}
+                      {fmtDuration(r.durationS)} riding
+                    </>
+                  )}
                   {/* Converted for display, and the STORED figure stays degrees
                     per mile — see rollUpTwist() in src/stats/shape.ts for why the
                     band labels are not converted with it. */}
                   {r.twistinessDpm != null && (
                     <>
                       {' '}
-                      {SEP}{Math.round(twistFrom(r.twistinessDpm, units))}
+                      {SEP}
+                      {Math.round(twistFrom(r.twistinessDpm, units))}
                       {twistUnit(units)}
                     </>
                   )}
                 </p>
 
                 {rows.length === 0 ? (
-                  <p class="rb-empty">No stops on this day.</p>
+                  <p class="rb-empty">No stops on this route.</p>
                 ) : (
                   <table class="rb-table">
                     <thead>

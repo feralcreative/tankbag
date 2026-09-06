@@ -19,7 +19,7 @@
 //
 // FUEL AND VOLUME ARE NOT HERE, and their absence is deliberate rather than
 // unfinished. A bike's range is stored in meters and typed in miles
-// (src/bikes/policy.ts), so it follows this axis for free; litres-vs-gallons is a
+// (src/bikes/policy.ts), so it follows this axis for free; liters-vs-gallons is a
 // third question nothing in the app currently asks, and a member added here for
 // it would be a member no formatter reads.
 

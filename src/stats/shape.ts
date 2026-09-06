@@ -463,7 +463,7 @@ export function shapeStats(
 
   const tiles: Tile[] = [
     { label: t.rides === 1 ? 'ride' : 'rides', value: fmtCount(t.rides), spread: spread(global?.rides) },
-    { label: t.days === 1 ? 'day' : 'days', value: fmtCount(t.days), spread: spread(global?.days) },
+    { label: t.days === 1 ? 'route' : 'routes', value: fmtCount(t.days), spread: spread(global?.days) },
     // LEGS IS ON THIS LIST KNOWINGLY. A leg is an internal artifact, one per pair
     // of consecutive points, and it is not a unit any rider thinks in. It was put
     // in the scope deliberately on 2026-08-16 rather than by omission, so it is
@@ -526,7 +526,7 @@ export function shapeStats(
 
   if (r.longestDayM != null && r.longestDayM > 0) {
     records.push({
-      label: 'Longest single day',
+      label: 'Longest single route',
       value: fmtDistance(r.longestDayM, units),
       unit: distanceUnit(units),
       // The ride's title, which this record did not carry before it had a

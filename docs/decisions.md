@@ -151,7 +151,7 @@ A ride has at least one group, seeded rather than asked for. That seed was clien
 
 ## A shaping point is snapped to the routed road, not to the drop, 2026-09-06
 
-A shaping point is dropped wherever the rider's pointer lands, which is routinely a coordinate that is not on any road—a field, a river, the wrong carriageway of a divided highway, the frontage road running beside the one they meant. Routes accepts it and snaps it to whatever road is nearest, so the road that comes back is not reliably the road the rider pointed at. The handle then sits out in the field saying nothing about which road was chosen, the leg's geometry is the wrong one, and that wrong geometry is what every export and every hand-off to a nav app is built from.
+A shaping point is dropped wherever the rider's pointer lands, which is routinely a coordinate that is not on any road—a field, a river, the wrong side of a divided highway, the frontage road running beside the one they meant. Routes accepts it and snaps it to whatever road is nearest, so the road that comes back is not reliably the road the rider pointed at. The handle then sits out in the field saying nothing about which road was chosen, the leg's geometry is the wrong one, and that wrong geometry is what every export and every hand-off to a nav app is built from.
 
 **The snap happens AFTER the response, from the routed geometry.** The road Google chose is already in hand, so projecting each via onto it costs nothing: no Roads API, no second credential on `GMAPS_SERVER_KEY`, and no request per drag. `snapToTrack()` in `route-shape.js` is the arithmetic and `snapVias()` in `builder.js` is the caller.
 

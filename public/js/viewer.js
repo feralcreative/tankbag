@@ -320,10 +320,10 @@
     }
     const a = activeAtMoment(state.ride.days, state.moment);
     const multi = state.ride.days.length > 1;
-    const dayName = (i) => state.ride.days[i].title || (multi ? "Day " + (i + 1) : state.ride.title);
+    const dayName = (i) => state.ride.days[i].title || (multi ? "Route " + (i + 1) : state.ride.title);
     let what;
     if (a.dayIndex == null) {
-      what = "between days";
+      what = "between routes";
     } else if (a.legIndex != null) {
       what = dayName(a.dayIndex) + SEP + "leg " + (a.legIndex + 1) + " of " + state.ride.days[a.dayIndex].legs.length;
     } else {
@@ -422,7 +422,7 @@
     const anyAlt = days.some((r) => r.altGroup != null);
     table.innerHTML = days
       .map((r, i) => {
-        const name = r.title || (multi ? "Day " + ordinals[i] : state.ride.title);
+        const name = r.title || (multi ? "Route " + ordinals[i] : state.ride.title);
         const ghost = r.altGroup != null && !r.altActive;
         // BOTH MEMBERS ARE BADGED, not only the loser. A single "alternate" tag
         // on one row leaves the reader wondering what it is an alternate TO;
@@ -434,8 +434,10 @@
               (ghost ? "" : " is-on") +
               '" title="' +
               (ghost
-                ? "An alternative to day " + esc(ordinals[i].replace(/[a-z]+$/, "")) + ". Not counted in the ride total."
-                : "The route counted in the ride total. This day has alternatives.") +
+                ? "An alternative to route " +
+                  esc(ordinals[i].replace(/[a-z]+$/, "")) +
+                  ". Not counted in the ride total."
+                : "The route counted in the ride total. This one has alternatives.") +
               '">' +
               (ghost ? "alternative" : "riding this") +
               "</span>";
@@ -504,7 +506,7 @@
         "beforeend",
         '<tr class="day-total"><td>' +
           n +
-          (n === 1 ? " day" : " days") +
+          (n === 1 ? " route" : " routes") +
           ", not counting alternatives</td>" +
           '<td class="day-miles">' +
           U.distanceFromMiles(counted, UNITS).toFixed(1) +
@@ -568,8 +570,8 @@
       table.innerHTML +=
         '<tr class="day-downloads-row day-zip-row"><td colspan="2">' +
         '<a class="day-zip-label" href="/faq#one-file-per-day" target="_blank" rel="noopener" ' +
-        'title="One file per day, named so they re-import in order and dated">' +
-        "One file per day (zip)</a>: " +
+        'title="One file per route, named so they re-import in order and dated">' +
+        "One file per route (zip)</a>: " +
         zips +
         "</td></tr>";
     }

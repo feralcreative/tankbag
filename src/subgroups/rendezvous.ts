@@ -24,10 +24,10 @@ import { bearing, turn } from '../maps/twist'
 export type Rendezvous = {
   /** `[lng, lat]`, like every coordinate in this app. */
   at: [number, number]
-  /** Metres along the trunk from its start. What makes one candidate earlier
+  /** Meters along the trunk from its start. What makes one candidate earlier
    *  than another, and what the caller needs to cut the trunk at. */
   alongM: number
-  /** Extra metres the joining group rides versus going direct to the trunk's
+  /** Extra meters the joining group rides versus going direct to the trunk's
    *  end. The primary ranking term, and the one a planner is shown. */
   divertM: number
   /** Degrees between the joining group's final bearing and the trunk's own at
@@ -283,7 +283,7 @@ export function proposeRendezvous(
 
   // Existing fuel stops, offered whether or not the sampler happened to land on
   // them. Snapped to their nearest trunk vertex so `alongM` is comparable and
-  // so a stop a hundred metres off the line is still a point on the route.
+  // so a stop a hundred meters off the line is still a point on the route.
   for (const stop of fuelStops) {
     if (!stop.roles.includes('gas')) continue
     let best = -1
@@ -370,7 +370,7 @@ export type GroupMeet = {
    *  coordinate. `alongM` still comes from the snapped vertex, because ranking
    *  is about distance along the road. */
   at: [number, number]
-  /** Metres along the MAIN group's track, so the caller can cut it here. There
+  /** Meters along the MAIN group's track, so the caller can cut it here. There
    *  is no "which group's track" field: it is always the main group's, which is
    *  the whole point of the shape. */
   alongM: number
@@ -525,7 +525,7 @@ function scoreGroupMeet(
   // THE PLACE'S OWN POSITION WHERE THERE IS ONE. It sits within ON_ROUTE_M of
   // the vertex by construction, so every distance below is unchanged to within
   // that — and the coordinate the rider is actually sent to is the forecourt
-  // rather than the carriageway outside it.
+  // rather than the highway outside it.
   const at = place ? place.at : primary.track[vertexIndex]
   const isFuel = place !== null
   const alongM = pre[vertexIndex]

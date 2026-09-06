@@ -122,8 +122,8 @@ importRoutes.get('/import', requireActive, async (c) => {
                 accept={[...FORMATS.map((f) => `.${f.ext}`), '.zip'].join(',')}
               />
               <span class="field-hint">
-                Up to {MAX_BYTES / MB} MB each, depending on the format. Pick several and each becomes a day, or drop a{' '}
-                <strong>.zip</strong> of them.
+                Up to {MAX_BYTES / MB} MB each, depending on the format. Pick several and each becomes a route, or drop
+                a <strong>.zip</strong> of them.
               </span>
             </p>
 
@@ -186,8 +186,8 @@ importRoutes.get('/import', requireActive, async (c) => {
                     this applies and your file imports the way it always did.
                   </li>
                   <li>
-                    Then <b class="f-ride">the ride</b>, <b class="f-day">d plus the day number</b>,{' '}
-                    <b class="f-date">the date</b> that day starts, and <b class="f-label">what you call it</b>.
+                    Then <b class="f-ride">the ride</b>, <b class="f-day">d plus the route number</b>,{' '}
+                    <b class="f-date">the date</b> that route starts, and <b class="f-label">what you call it</b>.
                     Everything after the ride name is optional.
                   </li>
                   <li>Underscores separate the parts, so hyphens are what go inside one.</li>
@@ -265,8 +265,8 @@ importRoutes.get('/import', requireActive, async (c) => {
           ) : (
             <>
               <p class="lede">
-                Find the rides you want, pick a format for each, and take the lot as one zip. A multi-day ride can also
-                come down as a zip of one file per day, from the ride's own page.
+                Find the rides you want, pick a format for each, and take the lot as one zip. A multi-route ride can
+                also come down as a zip of one file per route, from the ride's own page.
               </p>
 
               {/*

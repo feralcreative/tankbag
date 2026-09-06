@@ -906,7 +906,7 @@ function builderHtml(
   const routesTab = `        <div class="panel-tabpanel is-active" role="tabpanel" id="panel-routes" aria-labelledby="tab-routes" tabindex="0">
           <div class="tab-actions">
             ${faqLink('waypoint-poi-stop', 'the difference between a stop and a POI')}
-            <button type="button" class="day-add" id="day-add" title="Add a day">+ Day</button>
+            <button type="button" class="day-add" id="day-add" title="Add a route">+ Route</button>
           </div>
 
           <!-- Select mode's action bar, filled by renderSelectBar() in builder.js
@@ -916,7 +916,7 @@ function builderHtml(
           <div class="select-bar" id="select-bar" hidden></div>
 
           <div class="day-list" id="day-list" data-duration-format="${prefs.durationFormat}"></div>
-          <p class="day-empty-hint" id="day-empty-hint" hidden>No days yet.</p>
+          <p class="day-empty-hint" id="day-empty-hint" hidden>No routes yet.</p>
         </div>`
 
   // GROUPS (#67). A named set of riders sharing an approach; a day belongs to
@@ -1108,7 +1108,7 @@ ${
                   .map(
                     ([f, label]) =>
                       `<li><a data-export="${f}" href="${slug ? `/api/public/maps/${encodeURIComponent(slug)}/${f}?dl` : '#'}">${label}</a>` +
-                      ` <a class="export-zip" data-export="zip/${f}" href="${slug ? `/api/public/maps/${encodeURIComponent(slug)}/zip/${f}` : '#'}">one file per day</a></li>`,
+                      ` <a class="export-zip" data-export="zip/${f}" href="${slug ? `/api/public/maps/${encodeURIComponent(slug)}/zip/${f}` : '#'}">one file per route</a></li>`,
                   )
                   .join('\n              ')
               }
