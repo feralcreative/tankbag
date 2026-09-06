@@ -34,6 +34,7 @@ import { GMAPS_KEY, GMAPS_MAP_ID } from '../config'
 import { generateSlug } from '../maps/slug'
 import { canClone } from '../access/policy'
 import { memberOrOwner, seedOwner } from '../members/service'
+import { seedMainGroup } from '../subgroups/service'
 import {
   canAdminister,
   canEditAsMember,
@@ -160,6 +161,12 @@ builderRoutes.post('/api/rides', requireActiveApi, requireSameOrigin, jsonLimit,
     // In the SAME transaction as the ride, so a ride never exists with an empty
     // roster — see seedOwner.
     await seedOwner(tx, ride.id, user.id)
+    // AND ITS MAIN GROUP, in the same transaction and for the same reason:
+    // every ride has at least one group, and the builder seeds that one
+    // CLIENT-SIDE — so a ride made by any other path arrived with none. It
+    // no-ops when the payload already brought one, which is why it is safe
+    // here whether insertRideGraph has already run or not.
+    await seedMainGroup(tx, ride.id)
     return ride
   })
   console.log(`[rides] user ${user.id} created ride ${created.id} (${created.stopCount} stops)`)
@@ -314,6 +321,12 @@ builderRoutes.post('/api/rides/:id/clone', requireActiveApi, requireSameOrigin, 
     // whoever took it, and copying the source's members would put a stranger on
     // a ride they were never invited to.
     await seedOwner(tx, ride.id, user.id)
+    // AND ITS MAIN GROUP, in the same transaction and for the same reason:
+    // every ride has at least one group, and the builder seeds that one
+    // CLIENT-SIDE — so a ride made by any other path arrived with none. It
+    // no-ops when the payload already brought one, which is why it is safe
+    // here whether insertRideGraph has already run or not.
+    await seedMainGroup(tx, ride.id)
     return ride
   })
 
@@ -929,7 +942,21 @@ function builderHtml(
                survives a re-render by not being rebuilt at all—state.meet is still
                what it is drawn from, because taking one point re-renders the rows.
                Hidden until the ride has a second group: one group has nobody to meet. -->
-          <button type="button" class="btn btn-sm sg-meet" id="sg-meet-all" hidden>Find meeting points</button>
+          <div class="sg-meet-row" id="sg-meet-row" hidden>
+            <button type="button" class="btn btn-sm sg-meet" id="sg-meet-all">Find meeting points</button>
+            <!-- THE DIVERT DIAL. It sits BESIDE the button rather than in ride
+                 preferences because it is the one number that decides what comes
+                 back, and a planner who gets three answers too far off their
+                 road has to be able to say so without leaving the panel. Session
+                 state, not a column: it is a question about this press, and a
+                 ride-level answer is a schema change for a number the planner
+                 re-asks the moment the road changes. Ziad's call, 2026-09-06. -->
+            <label class="sg-divert" for="sg-divert">
+              <span>within</span>
+              <input type="number" id="sg-divert" min="1" max="200" step="5" value="25" inputmode="numeric" />
+              <span>mi detour</span>
+            </label>
+          </div>
           <div class="sg-meet-out" id="sg-meet-out"></div>
         </div>`
 

@@ -390,8 +390,24 @@
     // Right margin is 0 and must stay 0: .day-head's `gap: 10px` is what spaces
     // this from the caret now. It was 0.15em, which simply added to the gap and
     // made the first of the four spacings wider than the other three.
-    margin: -0.5em 0 -0.5em -0.6em;
-    border-radius: 8px 0 0 8px;
+    //
+    // ONE PIXEL SHORT OF THE SECTION'S OWN EDGE on the other three sides, and
+    // that pixel is doing two jobs. The margins used to land the tab exactly on
+    // the padding box — which is exactly where .is-active paints its 1px inset
+    // ring, and a CHILD ELEMENT PAINTS ABOVE A PARENT'S INSET BOX-SHADOW, so the
+    // tab punched a 14px hole in the ring at the top and the bottom of every
+    // active day. Reported as the handle overlapping the border, which is what
+    // it looks like. The corner is the other job: .day-section rounds its BORDER
+    // box at 8px while this tab is anchored 3px in, at the far side of the color
+    // rail, so an 8px radius here is a curve struck from the wrong origin and
+    // bulges past the section's own. 6px against a padding-box corner of 5px
+    // horizontal by 8px vertical stays inside it at every size.
+    //
+    // Keep the 1px on all three: taking it off any one side reopens the ring
+    // there. It is px rather than em deliberately — it is matching a 1px ring,
+    // not tracking the drawer's type.
+    margin: calc(-0.5em + 1px) 0 calc(-0.5em + 1px) calc(-0.6em + 1px);
+    border-radius: 6px 0 0 6px;
     cursor: grab;
     background: color-mix(in srgb, var(--day-color, #{$neutral-88}) 16%, #{$white});
     color: color-mix(in srgb, var(--day-color, #{$neutral-50}) 55%, #{$white});
@@ -2590,6 +2606,11 @@
 
 .sg-row {
   display: flex;
+  // WRAPS, because the starting point is a second LINE of the row rather than a
+  // sibling of it: Sortable's raw indices count every child of .sg-list, so a
+  // line between two rows would make them read about double — #166, the same
+  // reason the "Main" tag is inside the first row.
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.35rem;
   margin: 0.4rem 0;
@@ -2627,6 +2648,25 @@
     border: 1px solid $grey;
     border-radius: 5px;
     background: none;
+  }
+
+  // WHERE THE GROUP SETS OFF FROM. Full width so it takes the whole second line,
+  // and indented to the name field's own left edge rather than the row's — it is
+  // a fact about the group whose name is above it, and starting under the grip
+  // would read as another column.
+  //
+  // `min-width: 0` plus the ellipsis because a place name can be long and a
+  // 380px drawer cannot widen: the alternative is a row that grows a third line
+  // for one address. The full text is in a `title`.
+  .sg-start {
+    flex: 0 0 100%;
+    min-width: 0;
+    margin: 0.15rem 0 0 2.25rem;
+    font-size: 0.72em;
+    color: $neutral-57;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .sg-del {
@@ -2685,7 +2725,6 @@
   display: flex;
   justify-content: center;
   width: 100%;
-  margin-top: 0.6rem;
 
   // `display: flex` BEATS THE `hidden` ATTRIBUTE, and this button is hidden by
   // it whenever the ride has one group. Without this rule renderSubgroups()
@@ -2693,6 +2732,57 @@
   // trap, and the reason the rule sits next to the display that causes it.
   &[hidden] {
     display: none;
+  }
+}
+
+// THE BUTTON AND ITS DIVERT DIAL, and the pair is what gets hidden on a solo
+// ride rather than the button alone — a bare "within 25 mi detour" under a ride
+// with one group is a control for a question nobody asked. The row carries the
+// top margin the button used to, so the two cannot drift apart.
+//
+// The same `[hidden]` trap as .sg-meet above and for the same reason: this sets
+// a `display`, which outranks the attribute.
+.sg-meet-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+
+  &[hidden] {
+    display: none;
+  }
+
+  // The button takes what is left. It is `width: 100%` in its own rule, which
+  // inside a flex row is a BASIS rather than a size, so this is what stops the
+  // dial being squeezed to its minimum beside it.
+  .sg-meet {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-top: 0;
+  }
+}
+
+// "within [ 25 ] mi detour". A label wrapping the field so the words either
+// side are its accessible name — the number alone says nothing, and "Maximum
+// divert" as a visible label would be a line of panel spent on a word no
+// planner uses.
+.sg-divert {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex: 0 0 auto;
+  font-size: 0.8em;
+  color: $neutral-57;
+  white-space: nowrap;
+
+  input {
+    // Wide enough for three digits and the spinner, and NO wider: this sits
+    // beside the panel's primary action and a field that reads as the same
+    // weight as the button competes with it.
+    width: 3.6em;
+    padding: 0.15em 0.3em;
+    font-size: 1em;
+    text-align: right;
   }
 }
 
@@ -2883,6 +2973,14 @@
   font-size: 0.75em;
   font-weight: 600;
   color: $neutral-36;
+
+  // A LABEL THAT FOLLOWS A FIELD IS OPENING A SECOND QUESTION, so it gets air
+  // the uniform grid gap does not give it. Without this the name, its box, the
+  // start label and its box read as four unrelated lines at one spacing rather
+  // than as two labelled fields.
+  input + & {
+    margin-top: 0.35rem;
+  }
 }
 
 .sg-new-start,
@@ -3217,6 +3315,28 @@
 
   &.is-error {
     color: $stop;
+  }
+}
+
+// A verb inside a note. A real <button> and not a click handler on the sentence
+// — the note carries the explanation and the button carries the action, and only
+// one of those a keyboard can reach. Styled as a link rather than as a .btn
+// because it sits mid-sentence, where a guide-sign field would read as a second
+// paragraph; $btn-flat is the list for buttons that want no sign, and this wants
+// no button at all.
+.note-action {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: $url;
+  text-decoration: underline;
+  cursor: pointer;
+
+  &:disabled {
+    color: $neutral-57;
+    text-decoration: none;
+    cursor: default;
   }
 }
 

@@ -39,6 +39,7 @@ import { days as daysTable, points as pointsTable, routeLegs } from '../db/schem
 import { currentUser, requireActiveApi, requireSameOrigin, type AuthEnv } from '../auth/middleware'
 import { ownRide } from './maps'
 import {
+  clampDivert,
   proposeGroupMeet,
   worstDivertMi,
   type FuelCandidate,
@@ -60,6 +61,22 @@ rendezvousRoutes.post('/api/rides/:id/rendezvous', requireActiveApi, requireSame
   const user = currentUser(c)
   const ride = await ownRide(user.id, c.req.param('id'))
   if (!ride) return c.json({ error: 'not found' }, 404)
+
+  // HOW FAR OUT OF THEIR WAY A JOINING GROUP MAY BE SENT, from the planner
+  // rather than from a constant. Ziad's call, 2026-09-06: an earliest-acceptable
+  // rule always lands NEAR the limit, so `maxDivertMi` stopped being a guard
+  // against nonsense the day the scoring was reversed and became the actual
+  // dial — and it had no control, which made the one number deciding where a
+  // meeting point lands the one number nobody could touch.
+  //
+  // CLAMPED RATHER THAN REFUSED WITH A 400. The only ways to reach this with a
+  // bad value are a typo in a number box and a hand-written request; neither is
+  // worth losing the whole proposal over, and the clamp protects the sampling
+  // cost as well. Anything unparseable comes back undefined, which spreads as a
+  // no-op and leaves the proposer's own default — so a client that sends
+  // nothing behaves exactly as it did before this existed.
+  const body = (await c.req.json().catch(() => ({}))) as { maxDivertMi?: unknown }
+  const divertOpt = { maxDivertMi: clampDivert(body.maxDivertMi) }
 
   const groups = await subgroupsOf(ride.id)
   // One group has nobody to meet. A real answer rather than an error.
@@ -251,7 +268,7 @@ rendezvousRoutes.post('/api/rides/:id/rendezvous', requireActiveApi, requireSame
     // stations in that window and the second pass re-scores with them. Searching
     // first would mean guessing where to look, and looking along the whole route
     // is a Text Search bill that scales with the length of the ride.
-    const plain = proposeGroupMeet(primary as GroupRoute, one, fuel)
+    const plain = proposeGroupMeet(primary as GroupRoute, one, fuel, divertOpt)
     const stations = plain.length ? await gasAlong(plain, searchAnchors) : []
     // `fuelOnly` and NOT a filter over the ordinary result: the ranking prefers
     // the earliest viable point and keeps only the best few, so a station a
@@ -262,7 +279,13 @@ rendezvousRoutes.post('/api/rides/:id/rendezvous', requireActiveApi, requireSame
     // removes some and the rider still wants a choice. It is what keeps the
     // routing bounded: every survivor costs one Routes request.
     const onlyGas = stations.length
-      ? proposeGroupMeet(primary as GroupRoute, one, [...fuel, ...stations], { fuelOnly: true }, GAS_SHORTLIST)
+      ? proposeGroupMeet(
+          primary as GroupRoute,
+          one,
+          [...fuel, ...stations],
+          { ...divertOpt, fuelOnly: true },
+          GAS_SHORTLIST,
+        )
       : []
 
     // A MEETING POINT SHOULD BE A GAS STATION — Ziad's call, 2026-09-03.

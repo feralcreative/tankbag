@@ -1,7 +1,7 @@
 # Status and handoff
 
-**Updated:** 2026-09-05
-**Branch:** `fix/plan-meet-trunk`, ten commits ahead of `main`, **pushed**, no PR. **2,416 tests across 94 files** (2 skipped, 2,418 total)
+**Updated:** 2026-09-06
+**Branch:** `fix/plan-meet-trunk`, eleven commits ahead of `main` plus uncommitted work, **not pushed**, no PR. **2,428 tests across 94 files** (2 skipped, 2,430 total)
 **Merged 2026-09-03 as [#238](https://github.com/feralcreative/routeloop/pull/238):** the builder routing sprint, closing [#232](https://github.com/feralcreative/routeloop/issues/232), [#29](https://github.com/feralcreative/routeloop/issues/29), [#28](https://github.com/feralcreative/routeloop/issues/28), [#40](https://github.com/feralcreative/routeloop/issues/40) and [#226](https://github.com/feralcreative/routeloop/issues/226), plus [#234](https://github.com/feralcreative/routeloop/issues/234)–[#237](https://github.com/feralcreative/routeloop/issues/237) filed retroactively. [#30](https://github.com/feralcreative/routeloop/issues/30) was closed as not planned.
 **Closes, when the next PR merges:** [#233](https://github.com/feralcreative/routeloop/issues/233).
 **Filed retroactively and closed 2026-09-05, all on this branch:** [#241](https://github.com/feralcreative/routeloop/issues/241) group start form, [#242](https://github.com/feralcreative/routeloop/issues/242) a meeting point per group, [#243](https://github.com/feralcreative/routeloop/issues/243) Groups-panel undo, [#244](https://github.com/feralcreative/routeloop/issues/244) the public point address, [#245](https://github.com/feralcreative/routeloop/issues/245) the waypoint popup, [#246](https://github.com/feralcreative/routeloop/issues/246) the insert `+`, [#247](https://github.com/feralcreative/routeloop/issues/247) 1Password, [#248](https://github.com/feralcreative/routeloop/issues/248) shaping points across a delete. **[#239](https://github.com/feralcreative/routeloop/issues/239) stays OPEN**—it was filed up front and closes when the PR merges.
@@ -11,6 +11,28 @@
 **Closes, when it merges:** [#129](https://github.com/feralcreative/routeloop/issues/129), [#131](https://github.com/feralcreative/routeloop/issues/131), [#35](https://github.com/feralcreative/routeloop/issues/35) and [#13](https://github.com/feralcreative/routeloop/issues/13)—which clears `area:import-export` entirely. [#130](https://github.com/feralcreative/routeloop/issues/130), the content-width prerequisite, was already closed.
 **Closes, when it merges:** [#67](https://github.com/feralcreative/routeloop/issues/67) and [#52](https://github.com/feralcreative/routeloop/issues/52). Merged before it, in order: the recycle bin as [#149](https://github.com/feralcreative/routeloop/pull/149), the Paddock as [#151](https://github.com/feralcreative/routeloop/pull/151), the rider and access layer as [#152](https://github.com/feralcreative/routeloop/pull/152), and membership and voting as [#153](https://github.com/feralcreative/routeloop/pull/153).
 **For:** the next agent, or the owner returning cold
+
+## Finishing the grouping work before the PR—2026-09-06
+
+Six things were listed as still rough on [#239](https://github.com/feralcreative/routeloop/issues/239). Five are done and the sixth is by design.
+
+**SHAPING POINTS SNAP ONTO THE ROUTED ROAD.** A via is dropped wherever the pointer landed, which is regularly not on a road at all, and Routes snaps it to whatever is nearest and routes through that—so the road that came back was not reliably the road the rider pointed at, and that wrong road is what every export is built from. `snapToTrack()` in `route-shape.js` projects each via onto the returned geometry; `snapVias()` in `builder.js` calls it. **After the response, which is what makes it free**—no Roads API call. The handle visibly moves once the road lands, and that is the price.
+
+**ACCEPTING A MEETING POINT CUTS THE DAYS.** This reverses the 2026-09-03 call. `cutSharedStretch()` splits the main group's day at the meet and leaves the tail UNTAGGED, so the road everybody rides together is a shared day rather than the main group's. It lands after the LAST approach, not after the day it was cut from—`strandOf` reads position order, and the main group's day is routinely first.
+
+**A JOINING GROUP'S EARLIER DAYS MOVE WITH ITS DEPARTURE.** Only the day holding the meet was moved, so a group with days before it had those left where they were—and pulling a departure two hours earlier left them arriving at the meet before setting off from the previous night's hotel. `shiftEarlierDays()` moves them by the same delta, which keeps the gaps the rider chose.
+
+**THE DIVERT BUDGET HAS A CONTROL.** `maxDivertMi` became the actual dial the day the scoring was reversed and had no way to turn it. A miles field beside **Find meeting points**, session state like `corridorOn` and `ringOn`. `clampDivert()` is in the pure module so it has tests—and one of them **caught a real bug on landing**: `Number('')` is 0, so a cleared box clamped up to the one-mile floor and refused every candidate on the ride.
+
+**EVERY RIDE GETS ITS GROUP ON THE SERVER TOO.** `seedMainGroup()` runs beside `seedOwner()` in all four creating transactions plus the seed script, so no new ride can be groupless whatever made it. It CHECKS rather than inferring from the call site, because two of those paths reconcile the payload's own subgroups first and an unconditional insert would give every builder-saved ride a duplicate. **Still no backfill**—that half of the call stands.
+
+**THE RIDERS TAB OFFERS THE SAVE INSTEAD OF ONLY NAMING IT.** A group added since the last save has no numeric id, so nobody can be put on it. The note now carries a **Save the ride** button that runs the ordinary save and re-reads.
+
+**THE ONE LEFT IS BY DESIGN.** Ranking is straight-line until a candidate is accepted—`src/subgroups/rendezvous.ts` calls no router deliberately, and the shortlist IS routed for real by the fuel-range pass. That is not a gap to close.
+
+**Still open on #239 and deliberately so:** a day cut only happens on the main group's day, so a joining group that planned its own destination past the meet keeps that tail.
+
+**Needs a browser pass.** Nothing automated covers the panel, the map or the day list.
 
 ## Shaping points survive a deleted point—2026-09-05
 

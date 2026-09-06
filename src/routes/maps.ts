@@ -18,6 +18,7 @@ import { rides, days as daysTable, points, routeLegs, users as usersTable } from
 import { currentUser, requireActiveApi, requireSameOrigin, type AuthEnv } from '../auth/middleware'
 import { newUid } from '../maps/uid'
 import { seedOwner } from '../members/service'
+import { seedMainGroup } from '../subgroups/service'
 import {
   FORMAT_INFO,
   GPX_MAX_BYTES,
@@ -312,6 +313,12 @@ mapsRoutes.post(
             .returning()
           await insertRideGraph(tx, ride.id, payload)
           await seedOwner(tx, ride.id, user.id)
+          // AND ITS MAIN GROUP, in the same transaction and for the same reason:
+          // every ride has at least one group, and the builder seeds that one
+          // CLIENT-SIDE — so a ride made by any other path arrived with none. It
+          // no-ops when the payload already brought one, which is why it is safe
+          // here whether insertRideGraph has already run or not.
+          await seedMainGroup(tx, ride.id)
           return ride
         })
         console.log(`[import] user ${user.id} restored native ride ${created.id} (${created.visibility})`)
@@ -558,6 +565,12 @@ mapsRoutes.post(
           .returning()
 
         await seedOwner(tx, ride.id, user.id)
+        // AND ITS MAIN GROUP, in the same transaction and for the same reason:
+        // every ride has at least one group, and the builder seeds that one
+        // CLIENT-SIDE — so a ride made by any other path arrived with none. It
+        // no-ops when the payload already brought one, which is why it is safe
+        // here whether insertRideGraph has already run or not.
+        await seedMainGroup(tx, ride.id)
 
         // One day per file, in the order they were given. A single upload is
         // the same code path with one day in the list.

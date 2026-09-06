@@ -2,6 +2,7 @@ import 'dotenv/config'
 import { access, readFile } from 'node:fs/promises'
 import { newUid } from '../maps/uid'
 import { seedOwner } from '../members/service'
+import { seedMainGroup } from '../subgroups/service'
 import { sql } from 'drizzle-orm'
 import { db } from './index'
 import { users, rides, days, points, routeLegs } from './schema'
@@ -110,6 +111,9 @@ async function main() {
     .returning()
 
   await seedOwner(db, ride.id, u.id)
+  // The sample ride gets its main group too, so a seeded database looks like
+  // one the app made rather than one missing a thing every real ride has.
+  await seedMainGroup(db, ride.id)
 
   const [route] = await db
     .insert(days)
@@ -136,9 +140,11 @@ async function main() {
     )
   }
   if (split.legs.length > 0) {
-    await db.insert(routeLegs).values(
-      split.legs.map((l, i) => ({ dayId: route.id, position: i, geometry: l.geometry, distanceM: l.distanceM })),
-    )
+    await db
+      .insert(routeLegs)
+      .values(
+        split.legs.map((l, i) => ({ dayId: route.id, position: i, geometry: l.geometry, distanceM: l.distanceM })),
+      )
   }
 
   console.log(

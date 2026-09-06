@@ -91,6 +91,42 @@ export type RendezvousOptions = {
 const DEFAULTS = { maxDivertMi: 25, maxApproachDeg: 110, minSharedFraction: 0.2, sampleM: 2000, fuelOnly: false }
 
 /**
+ * What a divert budget may be, when it comes from outside.
+ *
+ * THE DIAL IS A RIDER-FACING NUMBER NOW, so it arrives over HTTP and cannot be
+ * trusted. It lives here rather than in the route for the reason every rule in
+ * this project does: a route is a query and a rule is a rule, and this one is
+ * testable with no database while the route is not.
+ *
+ * THE FLOOR IS A MILE — below that nothing but a group's own doorstep qualifies,
+ * so the proposer would answer "nowhere works" for every ride and read as
+ * broken. THE CEILING IS 200, which is what keeps the word "divert" meaning
+ * something: past that the constraint stops constraining and every point on the
+ * road passes, which is indistinguishable from having no proposal at all. It
+ * also bounds the work, since a wider allowance keeps more candidates alive
+ * through the scoring.
+ *
+ * UNDEFINED FOR ANYTHING UNUSABLE rather than a fallback number, which is what
+ * makes it spread into an options object as a no-op — so a caller that sends
+ * nothing, or sends nonsense, gets DEFAULTS and not this function's opinion.
+ */
+export const MIN_DIVERT_MI = 1
+export const MAX_DIVERT_MI = 200
+
+export function clampDivert(v: unknown): number | undefined {
+  // AN EMPTY STRING IS NOT ZERO, and this is the one case that has to be written
+  // out. `Number('')` is 0 and 0 is finite, so a rider who CLEARED the number box
+  // would post "" and be clamped up to the one-mile floor — which refuses every
+  // candidate on the ride and reads as the feature being broken rather than as a
+  // field left empty. Caught by its own test, having shipped wrong for an hour.
+  const str = typeof v === 'string' ? v.trim() : null
+  if (str === '') return undefined
+  const n = typeof v === 'number' ? v : str !== null ? Number(str) : NaN
+  if (!Number.isFinite(n)) return undefined
+  return Math.min(MAX_DIVERT_MI, Math.max(MIN_DIVERT_MI, n))
+}
+
+/**
  * A place offered as a candidate in its own right.
  *
  * TWO SOURCES, ONE SHAPE. A stop already on the ride carrying the `gas` role,

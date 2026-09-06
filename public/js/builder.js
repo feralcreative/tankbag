@@ -591,6 +591,12 @@
     // range for — a rider who finds a 300-mile circle in the way turns it off.
     ringOn: true,
     corridorOn: false,
+    // HOW FAR OUT OF THEIR WAY A JOINING GROUP MAY BE SENT, in miles, for the
+    // next meeting-point press. Session-only and ride-wide for the same reason
+    // as the two above: it is how the planner is asking the question right now.
+    // The default matches the proposer's own, so the panel and an old client
+    // that sends nothing get the same answer.
+    maxDivertMi: 25,
     // markers[r] = { stops: [{marker, el}], pois: [{marker, el}] }
     markers: [],
     // WHICH DAY IS WAITING FOR A MAP CLICK, or null. Set by a day's "+ Stop"
@@ -3785,13 +3791,23 @@
       '<ul class="riders-list">' +
       data.riders.map((r) => riderRowHtml(r, data.groups)).join("") +
       "</ul>" +
+      // A BUTTON, NOT JUST A SENTENCE. Ziad's call, 2026-09-06. The line was
+      // accurate and left the rider with nothing to do about it: the ride saves
+      // on its own timer, so the answer was to go away, wait, and come back to a
+      // tab that would then quietly work. Pressing this saves and re-reads, so
+      // the group the rider just made is assignable in the place they noticed it
+      // was not. It is a plain save — the same one the timer runs — because a
+      // second write path for "save so I can assign somebody" is a second thing
+      // to keep in step with conflicts, merges and the recovery draft.
       (unsaved.length
         ? '<p class="riders-note">' +
           esc(unsaved.map((g) => g.name).join(", ")) +
           (unsaved.length === 1 ? " is" : " are") +
           " not saved yet, so nobody can be put on " +
           (unsaved.length === 1 ? "it" : "them") +
-          " until the ride saves.</p>"
+          " yet. " +
+          '<button type="button" class="note-action" id="riders-save">Save the ride</button>' +
+          "</p>"
         : "") +
       '<div class="tab-actions">' +
       (state.slug
@@ -3899,6 +3915,26 @@
       // available here.
       ridersStale();
       if (!ok) toast("That group could not be set.", true);
+    });
+
+    // SAVE, THEN RE-READ. The group picker is built from the SERVER's list —
+    // which carries both the uid the client holds and the numeric id
+    // ride_members.subgroup_id needs — so a group made since the last save
+    // simply is not in it. This is the one press that closes that gap.
+    //
+    // ridersStale() is called from the save's own completion rather than
+    // straight after it, because the point is to re-read a roster that now
+    // includes the new group; re-reading before the write lands gets the same
+    // list back and the button looks broken.
+    host.addEventListener("click", async (e) => {
+      if (e.target.id !== "riders-save") return;
+      e.target.disabled = true;
+      e.target.textContent = "Saving…";
+      try {
+        await save();
+      } finally {
+        ridersStale();
+      }
     });
 
     host.addEventListener("click", async (e) => {
@@ -4090,6 +4126,19 @@
                 '<button type="button" class="sg-del" title="Remove this group" aria-label="Remove ' +
                 esc(g.name) +
                 '">×</button>') +
+            // WHERE THIS GROUP SETS OFF FROM, under its name. Ziad's call,
+            // 2026-09-06. A starting point is the one fact a group owns — it is
+            // what the add form collects and the only thing a joining group
+            // contributes to a meeting-point proposal — and once the form closed
+            // it was invisible, so a panel of three groups said nothing about
+            // which of them was which. It is also the fastest way to spot the
+            // failure this replaced: a group seeded at the ride's own start.
+            //
+            // INSIDE THE ROW, NOT A SIBLING. Sortable's raw oldIndex/newIndex
+            // count every child of the LIST, so a line between two rows is #166
+            // waiting to happen — the same reason the "Main" tag lives in the
+            // first row. The row wraps to a second line instead.
+            groupStartHtml(g.uid) +
             "</div>",
         )
         .join("") +
@@ -4115,8 +4164,11 @@
     // it is showing. `.sg-meet` sets `display: flex`, which BEATS the `hidden`
     // attribute, so the stylesheet carries an explicit `[hidden]` rule; without
     // it this line would do nothing at all.
-    const meetBtn = $("sg-meet-all");
-    if (meetBtn) meetBtn.hidden = groups.length < 2;
+    // THE ROW, NOT THE BUTTON. The divert field sits beside it and has to come
+    // and go with it, so what is hidden is the pair — and gating the button
+    // alone would leave a bare "within 25 mi detour" under a solo ride.
+    const meetRow = $("sg-meet-row");
+    if (meetRow) meetRow.hidden = groups.length < 2;
     // A PROPOSAL ABOUT A GROUP THAT IS GONE HAS TO BE TAKEN DOWN HERE. The
     // output used to be rebuilt empty by the innerHTML above; it is static now,
     // so deleting the second group would leave its candidate list on screen and
@@ -4131,6 +4183,43 @@
     // Rendering from `state.meet` rather than preserving innerHTML is what makes
     // the panel and the map agree: the dots are drawn from the same object.
     renderMeetOut();
+  }
+
+  /**
+   * The line under a group row saying where it sets off from.
+   *
+   * THE GROUP'S OWN FIRST DAY, FALLING BACK TO ITS STRAND — the same rule
+   * `startDayOf()` follows server-side, and it has to be the same one or the
+   * panel names a place the proposer is not using. A strand is a group's own
+   * days plus every SHARED one in position order, which is what a group riding
+   * nothing but shared days has instead of a day of its own; the main group is
+   * normally exactly that, since an ordinary ride tags no day at all.
+   *
+   * ACTIVE DAYS ONLY, matching every other walk over the list: a losing
+   * alternate is not a road anybody is riding, so it cannot be where a group
+   * starts.
+   *
+   * EMPTY RATHER THAN A PLACEHOLDER when there is nothing to say. A group whose
+   * day has no points yet has no starting point, and inventing "not set" for a
+   * state that lasts about a second reads as a warning about nothing.
+   *
+   * IT REFRESHES WITH renderSubgroups() AND DELIBERATELY NOT WITH EVERY POINT
+   * EDIT. That function rebuilds `#sg-body`, `.sg-name` inputs included, so
+   * calling it whenever a point moved would cost a rider the group name they
+   * were halfway through typing — #188, reached from the day list. The line can
+   * therefore be a beat behind if somebody renames the first point of a group's
+   * day; `renderDays()` cascades into here and catches it, and a stale place
+   * name is a far smaller cost than a destroyed field.
+   */
+  function groupStartHtml(groupUid) {
+    const active = ALT.activeDays(state.days);
+    const own = active.find((d) => d.subgroupUid === groupUid);
+    const day = own || active.find((d) => !d.subgroupUid);
+    const pt = day && day.points && day.points[0];
+    if (!pt) return "";
+    const name = pt.name || pt.address || "";
+    if (!name) return "";
+    return '<p class="sg-start" title="' + esc(name) + '">from ' + esc(name) + "</p>";
   }
 
   /** Redraw the proposal and re-pair its rows with the dots on the map.
@@ -4185,13 +4274,25 @@
     add.hidden = true;
     const box = document.createElement("div");
     box.className = "sg-new";
+    // THE NAME COMES FIRST NOW, AND IT IS NO LONGER LABELLED OPTIONAL. Ziad's
+    // call, 2026-09-06: every group should have a name, and the field sat under
+    // a search box whose pick is what CREATES the group — so the rider reached
+    // the commit before they reached the name, and "(optional)" told them not to
+    // bother going back for it. Type a name, then find where they set off from,
+    // then pick: the order now matches the order the form acts in.
+    //
+    // THE FALLBACK STAYS AND IS WHY THE LABEL IS NOT A LIE. createGroup() still
+    // names a group after the place it starts from when the field is empty, so
+    // a nameless group remains impossible to make — dropping "(optional)" is
+    // about what a planner is asked for, not a new refusal to make one without.
     box.innerHTML =
+      '<label class="sg-new-lab" for="sg-new-name">Group name</label>' +
+      '<input class="sg-new-name" id="sg-new-name" type="text" maxlength="80" autocomplete="off"' +
+      ' data-1p-ignore placeholder="Who is riding together" aria-label="Name for this group">' +
       '<label class="sg-new-lab" for="sg-new-start">Where does this group start?</label>' +
       '<input class="sg-new-start" id="sg-new-start" type="text" autocomplete="off" data-1p-ignore' +
       ' spellcheck="false" placeholder="Town, address or place">' +
       '<ul class="sg-new-hits" hidden></ul>' +
-      '<input class="sg-new-name" type="text" maxlength="80" autocomplete="off" data-1p-ignore' +
-      ' placeholder="Group name (optional)" aria-label="Name for this group">' +
       '<button type="button" class="btn btn-sm btn-quiet sg-new-cancel">Cancel</button>';
     add.parentNode.appendChild(box);
 
@@ -4201,7 +4302,11 @@
     let hits = [];
     let timer = null;
     let seq = 0;
-    startField.focus();
+    // THE FIRST FIELD TAKES FOCUS, which is now the name rather than the search.
+    // It used to be the search because that was the only field that mattered;
+    // the name is what the rider is asked for first now, and focus landing past
+    // it would say the opposite of what the order says.
+    nameField.focus();
 
     box.querySelector(".sg-new-cancel").addEventListener("click", closeNewGroup);
     box.addEventListener("keydown", (e) => {
@@ -4348,6 +4453,32 @@
     const meetBtn = $("sg-meet-all");
     if (meetBtn) meetBtn.addEventListener("click", findMeet);
 
+    // SESSION STATE AND NOT A RIDE FIELD, like corridorOn and ringOn: how far a
+    // detour is worth is a question about the press being made, and it does not
+    // survive a reload on purpose — the default is what a planner should get for
+    // pressing the button on a ride they have just opened.
+    //
+    // `change` and not `input`: a number box fires on every keystroke, so typing
+    // "120" would put state through 1 and then 12, and the last press before a
+    // blur would have used whichever of those the rider had got to.
+    const divert = $("sg-divert");
+    if (divert) {
+      divert.addEventListener("change", () => {
+        // AN EMPTY BOX MEANS THE DEFAULT, NOT ZERO. `Number("")` is 0, which the
+        // clamp below would lift to the one-mile floor — refusing every
+        // candidate on the ride, for a rider whose only act was to clear the
+        // field. Same trap as clampDivert() server-side, where a test caught it.
+        const raw = divert.value.trim();
+        const n = raw === "" ? NaN : Number(raw);
+        // OUT OF RANGE IS PUT BACK IN THE BOX, not silently corrected on the way
+        // to the server. The server clamps too — it does not trust a form — but
+        // a rider who typed 900 and got answers within 200 deserves to see the
+        // number that was actually used.
+        state.maxDivertMi = Number.isFinite(n) ? Math.min(200, Math.max(1, n)) : 25;
+        divert.value = String(state.maxDivertMi);
+      });
+    }
+
     // Delegated on the body, because every row is rebuilt by renderSubgroups
     // and a handler bound to a row would be thrown away with it.
     const body = $("sg-body");
@@ -4468,7 +4599,7 @@
       const res = await fetch("/api/rides/" + state.rideId + "/rendezvous", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ maxDivertMi: state.maxDivertMi }),
       });
       const data = await res.json();
       // A REFUSAL IS NOT A FAILURE AND MUST NOT READ AS ONE. The catch below
@@ -4957,7 +5088,13 @@
       const at =
         mainPlace && uidOfGroup === mainPlace.uid ? Math.max(1, mainPlace.at) : Math.max(1, day.points.length - 1);
       routed.push(addPoint(lng, lat, pt.name, dayIndex, pt, at));
-      placed.push({ uid: uidOfGroup, dayIndex, at });
+      // THE POINT'S OWN uid RIDES ALONG, and everything downstream resolves the
+      // index from it rather than trusting `at`. addPoint clamps the slot to the
+      // day's length, so `at` is where the point was ASKED to go and not
+      // necessarily where it went — and the two places that read it back, the
+      // departure sync and the day cut, are both off by one the moment they
+      // disagree. A uid is the identity that survives every edit in this file.
+      placed.push({ uid: uidOfGroup, dayIndex, at, puid: pt.uid });
       if (g) names.push(g.name);
     }
 
@@ -4994,7 +5131,12 @@
       // own — so writing to a captured node is no longer wrong, and re-reading
       // is kept because syncDeparturesToMeet() renders the whole panel in
       // between and this is the form that survives that being true again.
-      state.meetNote = '<p class="sg-note">' + syncDeparturesToMeet(placed) + "</p>";
+      const sync = syncDeparturesToMeet(placed);
+      // THE SHARED STRETCH BECOMES ITS OWN DAY, and it happens after the sync
+      // rather than before it because the sync addresses days by index and this
+      // changes them. It also needs the arrival the sync worked out: the shared
+      // day starts at the meeting point, which is the moment everybody is there.
+      state.meetNote = '<p class="sg-note">' + sync.note + cutSharedStretch(placed, sync.arrival) + "</p>";
       const host = $("sg-meet-out");
       if (!host) return;
       host.innerHTML = state.meetNote + (rest.length ? meetAllHtml(state.meet) : "");
@@ -5019,28 +5161,28 @@
    * anything. Do not reach for a local Date here.
    */
   function syncDeparturesToMeet(placed) {
-    const tail =
-      " Split a day at the meeting point from the row menu if you want the shared stretch to be its own day.";
     const mainUid = state.meta.subgroups[0] && state.meta.subgroups[0].uid;
     const main = placed.find((p) => p.uid === mainUid);
-    if (!main) return "They now ride through it." + tail;
+    if (!main) return { note: "They now ride through it.", arrival: null };
 
     const mainDay = state.days[main.dayIndex];
+    const mainAt = meetIndex(mainDay, main);
     const mainStart = mainDay && dayStartS(mainDay);
     // NOTHING TO SYNC TO, said rather than silently skipped. An undated main day
     // is the ordinary state of a ride nobody has put a date on yet, and a rider
     // who watched three departure times not change deserves to know it was this
     // and not a failure.
     if (mainStart == null) {
-      return (
-        "They now ride through it. Give " +
-        esc(subgroupName(mainUid)) +
-        "’s day a date and time to line the other groups up with it." +
-        tail
-      );
+      return {
+        note:
+          "They now ride through it. Give " +
+          esc(subgroupName(mainUid)) +
+          "’s day a date and time to line the other groups up with it.",
+        arrival: null,
+      };
     }
-    const mainToMeet = elapsedToPointS(mainDay, main.at);
-    if (mainToMeet == null) return "They now ride through it." + tail;
+    const mainToMeet = mainAt == null ? null : elapsedToPointS(mainDay, mainAt);
+    if (mainToMeet == null) return { note: "They now ride through it.", arrival: null };
     const arrival = mainStart + mainToMeet;
 
     // ITS OWN UNDO STEP. The point inserts pushed theirs while the rider was
@@ -5052,14 +5194,28 @@
     for (const p of placed) {
       if (p.uid === mainUid) continue;
       const day = state.days[p.dayIndex];
-      const toMeet = day && elapsedToPointS(day, p.at);
+      const at = meetIndex(day, p);
+      const toMeet = at == null ? null : elapsedToPointS(day, at);
       if (toMeet == null) continue;
       // The seconds are dropped so a rider is given a departure on the minute —
       // a route's duration is seconds-precise and "leave at 07:43:19" is a
       // false precision nobody can act on. Rounding DOWN, because the alternative
       // is telling somebody to leave after the moment they had to.
       const departS = Math.floor((arrival - toMeet) / 60) * 60;
+      const wasS = dayStartS(day);
       day.startAt = new Date(departS * 1000).toISOString();
+      // THE GROUP'S EARLIER DAYS COME WITH IT. Only the day HOLDING the meet was
+      // moved until 2026-09-06, so a group with a day or two before it had those
+      // left where they were — and moving a departure two hours earlier without
+      // them left the group arriving at the meet the day before they set off
+      // from the previous night's hotel. Ziad's call: the whole approach shifts.
+      //
+      // BY THE SAME DELTA, WHICH PRESERVES THE GAPS. Solving each earlier day
+      // backwards from this one would mean deciding how long a night is, which
+      // is the rider's answer and already in their dates. A day with no date is
+      // skipped rather than given one — an undated day is a day nobody has
+      // scheduled, and inventing a departure for it is not a sync.
+      if (wasS != null) shiftEarlierDays(p.uid, p.dayIndex, departS - wasS);
       moved.push(subgroupName(p.uid) + " " + fmtMoment(departS));
     }
     // refreshDerived() syncs every day's end from its new start, so the ends
@@ -5067,8 +5223,146 @@
     renderDays();
     refreshDerived();
     markDirty();
-    if (!moved.length) return "They now ride through it." + tail;
-    return "Everyone arrives at " + fmtMoment(arrival) + ". Leaving: " + esc(moved.join(SEP)) + "." + tail;
+    if (!moved.length) return { note: "They now ride through it.", arrival: arrival };
+    return {
+      note: "Everyone arrives at " + fmtMoment(arrival) + ". Leaving: " + esc(moved.join(SEP)) + ".",
+      arrival: arrival,
+    };
+  }
+
+  /**
+   * Where the meeting point actually landed in a day.
+   *
+   * BY uid, NEVER BY THE SLOT IT WAS ASKED FOR. `addPoint` clamps its `at` to
+   * the day's length, so a request to insert at 3 into a two-point day lands at
+   * 2 — and both readers of this number, the departure sync and the day cut, are
+   * silently off by one when that happens. `points.uid` is the identity that
+   * survives every edit in this file, which is exactly what it is for.
+   */
+  function meetIndex(day, p) {
+    if (!day) return null;
+    const i = day.points.findIndex((pt) => pt.uid === p.puid);
+    return i < 0 ? null : i;
+  }
+
+  /**
+   * Move a group's days BEFORE `dayIndex` by `deltaS` seconds.
+   *
+   * Its own days only — a shared day is ridden by everybody and belongs to the
+   * main group's clock, which this must never touch. Wall clock carried as UTC,
+   * so this is arithmetic on the stored value with no zone anywhere; see
+   * day-clock.js, the only place that value is converted.
+   *
+   * `endAt` is left alone deliberately: refreshDerived() re-derives every day's
+   * end from its start, so setting one here would be overwritten by a number
+   * worked out from the same delta a moment later.
+   */
+  function shiftEarlierDays(groupUid, dayIndex, deltaS) {
+    if (!deltaS) return;
+    for (let i = 0; i < dayIndex && i < state.days.length; i++) {
+      const d = state.days[i];
+      if (d.subgroupUid !== groupUid) continue;
+      const s = dayStartS(d);
+      if (s == null) continue;
+      d.startAt = new Date((s + deltaS) * 1000).toISOString();
+    }
+  }
+
+  /**
+   * Cut the shared stretch out of the main group's day and make it a day of its
+   * own, ridden by everybody.
+   *
+   * WHAT ACCEPTING A MEETING POINT USED TO LEAVE BEHIND. Every group's route
+   * reached the meeting point, which is the part that changes the ride — but the
+   * main group's day ran straight through it to the destination, so the road
+   * after the meet was tagged to the main group while every other group was
+   * expected to ride it. The rider was told to split the day themselves from the
+   * row menu. Ziad's call, 2026-09-06: it happens on accept.
+   *
+   * THE TAIL IS UNTAGGED, WHICH IS THE WHOLE POINT. A day with no subgroup is
+   * ridden by everyone, so cutting here turns "the main group's road, which the
+   * others somehow join" into the structure #67 describes: one approach day per
+   * group, then a shared day. `junctions()` derives a MEET at that boundary with
+   * no column and no flag — a run of tagged days followed by a shared one is
+   * what it looks for, which is exactly what this produces.
+   *
+   * IT GOES AFTER THE LAST APPROACH, NOT AFTER THE DAY IT WAS CUT FROM. Position
+   * is order, and `strandOf` builds a group's strand as its own days plus every
+   * SHARED one in position order — so a shared day sitting ahead of a joining
+   * group's approach would put the ride home before the ride out. The main
+   * group's day is routinely first in the list and the approaches are appended
+   * after it, so the naive splice is wrong in the ordinary case rather than the
+   * exotic one.
+   *
+   * IT STARTS AT THE ARRIVAL, NOT THE NEXT MORNING. `splitDayHere` seeds the
+   * second half off `nextMorningAfter` because a rider splitting a day is
+   * usually marking where they slept. This is the opposite: everybody meets and
+   * rides on, so the shared day begins the moment the last of them is there.
+   * With no arrival worked out — an undated ride — it is left undated too,
+   * which is what every other day of that ride already is.
+   *
+   * ITS OWN UNDO STEP, for the same reason the departure sync has one: it lands
+   * with the sync a second or two after the inserts, and a rider pressing undo
+   * once should get back the ride they were looking at rather than three edits.
+   *
+   * Returns the sentence to append to the note, or "" when there was nothing to
+   * cut — which is the ordinary outcome on a day whose meeting point is its last
+   * point, and not a failure.
+   */
+  function cutSharedStretch(placed, arrival) {
+    const mainUid = state.meta.subgroups[0] && state.meta.subgroups[0].uid;
+    const main = placed.find((p) => p.uid === mainUid);
+    if (!main) return "";
+    const r = main.dayIndex;
+    const day = state.days[r];
+    const i = meetIndex(day, main);
+    // NOTHING AFTER THE MEET IS NOT AN ERROR. canSplitAt refuses the last point,
+    // and a main group whose day ends at the meeting point has no shared stretch
+    // to cut out — everybody arrives and the day is over.
+    if (i == null || !SPLIT.canSplitAt(day, i)) return "";
+    if (state.days.length >= MAX_DAYS) {
+      return " The shared stretch is still part of " + esc(dayLabel(r)) + "—the ride is at its day limit.";
+    }
+
+    beginEdit("split at the meeting point");
+    const cut = SPLIT.splitDayAt(day, i, uid);
+
+    // Everybody rides it. This is the one line that makes the cut worth making.
+    cut.second.subgroupUid = null;
+    cut.second.title = "Together from " + (day.points[i].name || "the meeting point");
+
+    // A COLOR THAT IS NOT ITS NEIGHBOR'S, the same rule splitDayHere follows.
+    const used = new Set(state.days.map((d) => d.color));
+    cut.second.color = DAY_COLORS.find((c) => !used.has(c)) || DAY_COLORS[state.days.length % DAY_COLORS.length];
+
+    state.days.splice(r, 1, cut.first);
+    syncEnd(cut.first);
+    if (arrival != null) cut.second.startAt = new Date(arrival * 1000).toISOString();
+
+    // AFTER THE LAST APPROACH. Every placed day is an approach to this meeting
+    // point, so the shared stretch belongs after all of them — and the indices
+    // are re-read from the array rather than taken from `placed`, because the
+    // splice above has already moved everything past `r`.
+    let after = r;
+    for (const p of placed) {
+      const d = state.days[p.dayIndex] || null;
+      const at = d ? state.days.indexOf(d) : -1;
+      if (at > after) after = at;
+    }
+    state.days.splice(after + 1, 0, cut.second);
+    // THE ACTIVE DAY IS AN INDEX, so inserting ahead of it moves what it points
+    // at. `splitDayHere` gets away with not doing this because it finishes with
+    // goToDay(); this deliberately does not move the rider's attention — they
+    // are reading the panel, not the day list — so the index has to be carried
+    // across by hand or the next map click lands on the wrong day.
+    if (state.active > after) state.active += 1;
+
+    renderDays();
+    rebuildLayers();
+    renderMarkers();
+    refreshDerived();
+    markDirty();
+    return " The road after it is now a shared day everybody rides.";
   }
 
   const subgroupName = (uid) => {

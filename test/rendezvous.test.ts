@@ -12,6 +12,7 @@
 // always returns something is worse than one that sometimes says no.
 import { describe, expect, it } from 'vitest'
 import {
+  clampDivert,
   divertMi,
   proposeGroupMeet,
   proposeRendezvous,
@@ -222,6 +223,71 @@ describe('near-duplicates', () => {
 // THE GEOMETRY IS A Y. The main group sets off from the west at 40°N and rides
 // due east to the destination. A second group starts at 39°N and its road bends
 // up to join that line at the fork, which is the point most of these are about.
+// THE DIVERT BUDGET IS A RIDER-FACING NUMBER SINCE 2026-09-06, so it arrives
+// over HTTP and has to be treated as hostile. Empty is the one that matters: a
+// number box the rider cleared posts "", and Number("") is 0, which would refuse
+// every candidate on the ride and read as the feature being broken.
+describe('clampDivert', () => {
+  it('leaves a sane number alone, from either a form or JSON', () => {
+    expect(clampDivert(25)).toBe(25)
+    expect(clampDivert('40')).toBe(40)
+    expect(clampDivert(' 12 ')).toBe(12)
+  })
+
+  it('holds the floor and the ceiling', () => {
+    expect(clampDivert(0)).toBe(1)
+    expect(clampDivert(-500)).toBe(1)
+    expect(clampDivert(9000)).toBe(200)
+  })
+
+  it('is undefined for anything unusable, so the caller keeps its own default', () => {
+    expect(clampDivert('')).toBeUndefined()
+    expect(clampDivert('   ')).toBeUndefined()
+    expect(clampDivert(undefined)).toBeUndefined()
+    expect(clampDivert(null)).toBeUndefined()
+    expect(clampDivert('twenty')).toBeUndefined()
+    expect(clampDivert(NaN)).toBeUndefined()
+    expect(clampDivert({})).toBeUndefined()
+  })
+
+  it('spreads as a no-op when it declines, leaving DEFAULTS in place', () => {
+    // The shape the route actually builds. `{ maxDivertMi: undefined }` must not
+    // override the proposer's own 25 — which it would if the value were read
+    // with a plain `??` rather than spread over the defaults.
+    const straight = (a: [number, number], b: [number, number]): Track => {
+      const out: Track = []
+      for (let k = 0; k <= 120; k++) out.push([a[0] + ((b[0] - a[0]) * k) / 120, a[1] + ((b[1] - a[1]) * k) / 120])
+      return out
+    }
+    const main: GroupRoute = { id: 'n', origin: [-122, 40], track: straight([-122, 40], [-117, 40]) }
+    const join: GroupRoute = { id: 's', origin: [-122, 39.6], track: straight([-122, 39.6], [-117, 40]) }
+    const declined = proposeGroupMeet(main, [join], [], { maxDivertMi: clampDivert('') })
+    const plain = proposeGroupMeet(main, [join])
+    expect(plain.length).toBeGreaterThan(0)
+    expect(declined.map((m) => m.alongM)).toEqual(plain.map((m) => m.alongM))
+  })
+
+  // THE DIAL ACTUALLY MOVES THE ANSWER, which is the whole reason it got a
+  // control: an earliest-acceptable rule lands NEAR its limit, so widening the
+  // budget should bring the meeting point earlier along the main group's road.
+  it('a wider budget buys an earlier meeting point', () => {
+    const straight = (a: [number, number], b: [number, number]): Track => {
+      const out: Track = []
+      for (let k = 0; k <= 120; k++) out.push([a[0] + ((b[0] - a[0]) * k) / 120, a[1] + ((b[1] - a[1]) * k) / 120])
+      return out
+    }
+    const main: GroupRoute = { id: 'n', origin: [-122, 40], track: straight([-122, 40], [-117, 40]) }
+    // Well south of the road, so joining it early is expensive and joining it
+    // late is cheap — the shape the budget is a dial on.
+    const join: GroupRoute = { id: 's', origin: [-121, 39], track: straight([-121, 39], [-117, 40]) }
+    const tight = proposeGroupMeet(main, [join], [], { maxDivertMi: clampDivert(10) })
+    const wide = proposeGroupMeet(main, [join], [], { maxDivertMi: clampDivert(60) })
+    expect(tight.length).toBeGreaterThan(0)
+    expect(wide.length).toBeGreaterThan(0)
+    expect(wide[0].alongM).toBeLessThan(tight[0].alongM)
+  })
+})
+
 describe('proposeGroupMeet', () => {
   /** Straight line between two points, one vertex every ~1 km, end included. */
   const leg = (a: [number, number], b: [number, number]): Track => {

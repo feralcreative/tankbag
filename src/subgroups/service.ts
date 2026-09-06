@@ -12,6 +12,12 @@ import { and, eq, inArray } from 'drizzle-orm'
 import { db } from '../db/index'
 import { rideMembers, rideSubgroups, rides, users, type RideSubgroupRow, type TimeAnchor } from '../db/schema'
 import type { Tx } from '../maps/ride-graph'
+import { newUid } from '../maps/uid'
+
+/** The db or a transaction on it. `seedMainGroup` runs inside the same
+ *  transaction that inserts the ride at every real call site — the same
+ *  arrangement, and for the same reason, as seedOwner in ../members/service. */
+type Writer = Tx | typeof db
 
 /** What a payload carries for one subgroup. Ids never appear in a payload — the
  *  client has not seen them and must not have to. */
@@ -79,6 +85,47 @@ export const subgroupsOf = (rideId: number): Promise<RideSubgroupRow[]> =>
  * who has not been assigned, and a ride with no subgroups at all. Both get the
  * trunk, which is the whole ride in the second case — see strandOf.
  */
+/**
+ * Give a ride its main group, at the moment the ride is created.
+ *
+ * EVERY RIDE HAS AT LEAST ONE GROUP — planning a route means somebody is riding
+ * it, which is a group of one. `SEED_GROUP` in builder.js is what makes that
+ * true for a ride planned in the builder, and it is CLIENT-SIDE, so a ride
+ * created by any other path — an upload, a clone, the seed script — arrived with
+ * none and stayed that way until somebody opened it in the builder. Ziad's call,
+ * 2026-09-06: the four creating paths seed it themselves, so no new ride can be
+ * groupless whatever made it.
+ *
+ * THIS IS NOT A BACKFILL AND DELIBERATELY SO. Rides already stored without a
+ * group still get theirs the first time the builder saves them, which is the
+ * repair that was already there; what changes is that the set of such rides
+ * stops growing. A data migration over live rider records was declined for this
+ * on 2026-09-03 and that half of the decision stands.
+ *
+ * `onConflictDoNothing` on the ride/uid pair, so a caller that runs this twice
+ * — or one whose payload already carries a group with the same uid — writes one
+ * row. It does NOT set `rides.primary_subgroup_id`: the column is resolved from
+ * the payload's own order on every save (`subgroups[0]` is the main group), and
+ * a value written here would be one more thing that could disagree with the list
+ * a rider is looking at.
+ *
+ * The name matches what the builder seeds so a ride is not identifiable by which
+ * path created it.
+ */
+export async function seedMainGroup(w: Writer, rideId: number): Promise<void> {
+  // ONLY WHEN THE RIDE HAS NONE, checked rather than inferred from the call
+  // site. Two of the four creating paths run `insertRideGraph` FIRST, which
+  // reconciles the payload's own subgroups — so an unconditional insert would
+  // give every ride saved from the builder a second, empty group named the same
+  // as the one it already has. `onConflictDoNothing` does not catch that: the
+  // uid is minted here and is new by construction, so there is no conflict to
+  // catch. Asking is the only thing that works at all four sites in either
+  // order, which is what makes this safe to call from a fifth.
+  const existing = await w.select({ id: rideSubgroups.id }).from(rideSubgroups).where(eq(rideSubgroups.rideId, rideId))
+  if (existing.length > 0) return
+  await w.insert(rideSubgroups).values({ rideId, uid: newUid(), name: 'Group 1', position: 0 })
+}
+
 export async function subgroupOf(rideId: number, riderId: number): Promise<number | null> {
   const [row] = await db
     .select({ subgroupId: rideMembers.subgroupId })
