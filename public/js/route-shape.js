@@ -195,9 +195,7 @@
     for (var i = 0; i <= n; i++) {
       var brg = ((i % n) / n) * 2 * Math.PI;
       var lat2 = Math.asin(sinLat1 * Math.cos(d) + cosLat1 * Math.sin(d) * Math.cos(brg));
-      var lng2 =
-        lng1 +
-        Math.atan2(Math.sin(brg) * Math.sin(d) * cosLat1, Math.cos(d) - sinLat1 * Math.sin(lat2));
+      var lng2 = lng1 + Math.atan2(Math.sin(brg) * Math.sin(d) * cosLat1, Math.cos(d) - sinLat1 * Math.sin(lat2));
       out.push([lng2 / rad, lat2 / rad]);
     }
     return out;
@@ -205,16 +203,47 @@
 
   // Mirrors haversineTrack() in builder.js and the constant in twist.js. Both
   // use the IUGG mean radius; keep the three in step.
+  // Which original legs make up each leg of a day after some points are removed?
+  //
+  // Leg k joins points k and k+1, so a day of n points has n-1 legs. Take some
+  // points out and the survivors are re-joined in order: the leg between
+  // survivors S[j] and S[j+1] covers every original leg from S[j] through
+  // S[j+1]-1. A span of ONE is a leg the removal never touched — same two
+  // points, same road, keep it whole rather than paying the router to be told
+  // so. A span of more than one is a merge, and the shaping points of every leg
+  // it swallowed are still hints about a road between two points that both
+  // survive, so they are carried across in order.
+  //
+  // Returned as index pairs rather than as legs: building a leg needs a distance
+  // and a placeholder geometry, which is builder.js's business and not this
+  // file's. `removed` may be in any order and may repeat.
+  function rejoinSpans(nPoints, removed) {
+    const gone = new Set(removed || []);
+    const kept = [];
+    for (let i = 0; i < nPoints; i++) if (!gone.has(i)) kept.push(i);
+    const spans = [];
+    for (let j = 0; j < kept.length - 1; j++) spans.push({ from: kept[j], to: kept[j + 1] - 1 });
+    return spans;
+  }
+
   function haversineM(a, b) {
     const rad = Math.PI / 180;
     const dLat = (b[1] - a[1]) * rad;
     const dLng = (b[0] - a[0]) * rad;
-    const h =
-      Math.sin(dLat / 2) ** 2 + Math.cos(a[1] * rad) * Math.cos(b[1] * rad) * Math.sin(dLng / 2) ** 2;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(a[1] * rad) * Math.cos(b[1] * rad) * Math.sin(dLng / 2) ** 2;
     return 2 * 6371008.8 * Math.asin(Math.sqrt(h));
   }
 
   // haversineM is exported so range-circle.js can measure the straight line
   // between two points on a track without keeping a fourth copy of the formula.
-  window.TBShape = { legAtVertex, nearestVertexIndex, viaInsertIndex, pointAtDistance, sliceBetween, circlePath, haversineM };
+  window.TBShape = {
+    legAtVertex,
+    nearestVertexIndex,
+    viaInsertIndex,
+    pointAtDistance,
+    sliceBetween,
+    circlePath,
+    haversineM,
+    rejoinSpans,
+  };
 })(typeof window !== "undefined" ? window : this);

@@ -46,7 +46,7 @@ import {
   type GroupRoute,
 } from '../subgroups/rendezvous'
 import { subgroupsOf } from '../subgroups/service'
-import { strandOf } from '../subgroups/policy'
+import { startDayOf, strandOf } from '../subgroups/policy'
 import { activeDays } from '../maps/alts'
 import { METERS_PER_MILE, haversineM, type Track } from '../maps/kml'
 import { searchPlaces } from '../maps/places'
@@ -129,7 +129,11 @@ rendezvousRoutes.post('/api/rides/:id/rendezvous', requireActiveApi, requireSame
   const routeFor = (g: (typeof groups)[number]): GroupRoute | null => {
     const strand = strandOf(all, g.id)
     if (strand.length === 0) return null
-    const origin = originOf.get(strand[0].id)
+    // WHERE THEY SET OFF IS THEIR OWN DAY, NOT `strand[0]` — see startDayOf().
+    // A shared day sorting ahead of a group's own day used to become its origin,
+    // which handed every satellite the same starting point.
+    const startDay = startDayOf(all, g.id)
+    const origin = startDay && originOf.get(startDay.id)
     if (!origin) return null
     const track: Track = []
     for (const d of strand) {
@@ -280,9 +284,17 @@ rendezvousRoutes.post('/api/rides/:id/rendezvous', requireActiveApi, requireSame
     // PAIRED HERE RATHER THAN LOOKED UP LATER. `reach.approaches` is parallel to
     // `reach.keep` and to nothing else, so pairing them at the one point where
     // that is true beats indexing into it from a list that might be a fallback.
+    // A FALLBACK ROW GETS ITS ROAD TOO, AND IT COSTS NOTHING. `reachable()`
+    // routes a candidate to find out whether the group can reach it, so an
+    // out-of-range shortlist has ALREADY been routed and the paths were being
+    // thrown away — the rider was shown three dots with no roads at exactly the
+    // moment the roads are the point, since out-of-range means somebody has a
+    // long way to come. `routed` is every candidate it looked at, kept or not.
+    // A `no-gas` fallback is the one case that stays empty: those candidates are
+    // bare vertices the range filter never saw, so nothing has routed them.
     const rows = reach.keep.length
       ? reach.keep.map((m, i) => ({ m, path: reach.approaches[i]?.[0]?.path ?? [] }))
-      : (onlyGas.length ? onlyGas : plain).map((m) => ({ m, path: [] as Track }))
+      : (onlyGas.length ? onlyGas : plain).map((m) => ({ m, path: reach.routed.get(m)?.[0]?.path ?? ([] as Track) }))
     const note = reach.keep.length ? null : onlyGas.length ? 'out-of-range' : plain.length ? 'no-gas' : null
 
     return {
@@ -432,9 +444,13 @@ async function reachable(
   // rider is shown, and they are two different numbers whenever a ride has
   // enough groups for the budget to bite.
   routed: number,
-): Promise<{ keep: GroupMeet[]; approaches: Approach[][] }> {
+): Promise<{ keep: GroupMeet[]; approaches: Approach[][]; routed: Map<GroupMeet, Approach[]> }> {
   const keep: GroupMeet[] = []
   const approaches: Approach[][] = []
+  // EVERY CANDIDATE THIS ROUTED, kept or rejected. The requests are spent either
+  // way, so holding them is free — and it is what lets a fallback list be drawn
+  // with the same real roads as an ordinary one.
+  const routedPaths = new Map<GroupMeet, Approach[]>()
   const rangeM = rangeMi == null ? null : rangeMi * METERS_PER_MILE
 
   for (const m of candidates) {
@@ -464,6 +480,7 @@ async function reachable(
         continue
       }
       legs.push({ group: g.id, path: out.leg.geometry, distanceM: out.leg.distanceM })
+      routedPaths.set(m, legs)
       // A joining group sets off with a full tank — their strand's start is
       // their last fill — so the whole approach has to fit inside one.
       if (rangeM != null && out.leg.distanceM > rangeM) {
@@ -475,5 +492,5 @@ async function reachable(
     keep.push(m)
     approaches.push(legs)
   }
-  return { keep, approaches }
+  return { keep, approaches, routed: routedPaths }
 }

@@ -46,6 +46,28 @@ export function strandOf<T extends StrandDay>(days: T[], subgroupId: number | nu
   return days.filter((d) => d.subgroupId === null || d.subgroupId === subgroupId)
 }
 
+/**
+ * The day a group SETS OFF from, which is not always the first day of its strand.
+ *
+ * A JOINING GROUP CONTRIBUTES A STARTING POINT AND NOTHING ELSE, and it has to
+ * be their OWN. A strand is a group's days plus every SHARED one in position
+ * order, so a shared day sitting before a group's own day becomes `strand[0]` —
+ * and reading the origin from there hands the group somebody else's starting
+ * point. Measured on ride 34: two untagged one-point days left over from before
+ * groups seeded their own routes sorted ahead of both satellites, so the group
+ * starting in San Luis Obispo was proposed a meeting point as though it set off
+ * from Santa Cruz — and both joining groups came back with identical candidates
+ * and identical diverts, because they had been given the same origin.
+ *
+ * THE FALLBACK IS THE STRAND, NOT NULL. A group with no day of its own is one
+ * that rides only shared days, and where the shared road starts is the only
+ * honest answer available for it.
+ */
+export function startDayOf<T extends StrandDay>(days: T[], subgroupId: number): T | null {
+  const strand = strandOf(days, subgroupId)
+  return strand.find((d) => d.subgroupId === subgroupId) ?? strand[0] ?? null
+}
+
 /** Every subgroup with at least one day, in the order they first appear. Used
  *  for the legend and for deciding whether a ride has subgroups at all — which
  *  is what every surface tests before doing anything different. */

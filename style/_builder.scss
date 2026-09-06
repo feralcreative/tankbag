@@ -2671,13 +2671,29 @@
   }
 }
 
-// The panel's primary action, full width under the group list. It carries
-// `.btn .btn-sm` for its actual look — this only places it, because a `.btn`
-// is inline-flex and would otherwise sit hard against the note above it.
+// The panel's primary action, full width BELOW "Add a group" — the group rows
+// and this button were one innerHTML until 2026-09-05, so nothing could be put
+// between them; it is the page's own markup now. It carries `.btn .btn-sm` for
+// its actual look — this only places it, because a `.btn` is inline-flex and
+// would otherwise sit hard against the note above it.
+//
+// CENTERED, because a full-width button whose label sits hard left reads as a
+// row of text somebody forgot to finish rather than as the thing to press.
+// Ziad's call, 2026-09-05. `.btn-sm` is in $btn-flat, so there is no guide-sign
+// arrow on the right for the label to be balanced against.
 .sg-meet {
   display: flex;
+  justify-content: center;
   width: 100%;
   margin-top: 0.6rem;
+
+  // `display: flex` BEATS THE `hidden` ATTRIBUTE, and this button is hidden by
+  // it whenever the ride has one group. Without this rule renderSubgroups()
+  // would set `hidden` and nothing would happen — the classic version of this
+  // trap, and the reason the rule sits next to the display that causes it.
+  &[hidden] {
+    display: none;
+  }
 }
 
 // "part of this day only" beside the Nearby heading. Amber rather than red for
@@ -2833,8 +2849,27 @@
 // this collects one before anything exists — see openNewGroup(). It sits in
 // .tab-actions beside the button rather than inside #sg-body, which is rebuilt
 // whenever a day changes and would take a half-typed search with it.
+// FULL WIDTH THE WHOLE TIME, AND IT IS THE PARENT THAT MAKES IT SO. Ziad's
+// call, 2026-09-05. `.tab-actions` is a flex row, so this box was an auto-basis
+// flex item sized by its own content: it opened about as wide as the
+// placeholder and GREW with every character typed into the search. `flex: 0 0
+// 100%` takes it out of content sizing altogether. The button is `hidden` while
+// the form is open, so it needs no wrap to sit on its own line.
+//
+// `minmax(0, 1fr)` on the single column is the other half, and it is not
+// belt-and-braces: a grid track is max-content by default, so a long prediction
+// or a long typed value would push the track — and the box with it — wider than
+// the drawer even once the flex basis was fixed.
 .sg-new {
+  flex: 0 0 100%;
+  // ON THE BOX ITSELF, NOT ONLY ON THE FIELDS INSIDE IT. `flex-basis: 100%`
+  // sizes the CONTENT box, so with the padding and border below this was 100%
+  // of the row PLUS 1rem PLUS 2px and it overflowed the drawer by that much.
+  // There is no global border-box reset in style/ — see the gotcha in AGENTS.md.
+  box-sizing: border-box;
+  min-width: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.35rem;
   margin-top: 0.5rem;
   padding: 0.5rem;
@@ -2852,6 +2887,15 @@
 
 .sg-new-start,
 .sg-new-name {
+  // WIDTH FROM THE TRACK, NOT FROM THE CONTENT. An <input> has an intrinsic
+  // width of about twenty characters and a min-content width to match, so
+  // without these two the field sets the column width instead of taking it.
+  // box-sizing because there is no global border-box reset in style/ — see the
+  // gotcha in AGENTS.md — and 100% of a content box plus this padding would
+  // overflow the form.
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   font: inherit;
   font-size: 0.85em;
   padding: 0.3em 0.4em;
@@ -2876,6 +2920,7 @@
 .sg-new-hit {
   display: block;
   width: 100%;
+  box-sizing: border-box;
   padding: 0.3em 0.4em;
   border: 0;
   border-radius: 4px;

@@ -80,7 +80,7 @@
 
   // Pure drag-to-shape arithmetic — see route-shape.js.
   const { legAtVertex, nearestVertexIndex, viaInsertIndex, pointAtDistance } = window.TBShape;
-  const { sliceBetween, circlePath, haversineM } = window.TBShape;
+  const { sliceBetween, circlePath, haversineM, rejoinSpans } = window.TBShape;
 
   // Turning a SortableJS drop into a position in day.points — see drag-index.js.
   const DRAG = window.TBDragIndex;
@@ -2305,10 +2305,35 @@
       // Remove the legs that touched point i, then bridge the gap (if any). One
       // leg at either end of the day, two in the middle.
       const from = Math.max(0, i - 1);
-      day.legs.splice(from, i === 0 || i === pts.length ? 1 : 2);
+      const bridging = i > 0 && i < pts.length;
+      // THE SHAPING POINTS SURVIVE THE POINT. A via belongs to the pair of
+      // points its leg joins, and deleting a point in the MIDDLE does not
+      // dissolve that pair — it merges two of them into one, both ends of which
+      // are still on the day. So the two legs' vias are carried across in order
+      // rather than thrown away, and the road the rider drew by hand is still
+      // the road. This is the opposite of a MOVE, where one end of the pair has
+      // physically moved and the hint no longer describes anything.
+      //
+      // At either end of the day there is no merge: deleting the first or last
+      // point leaves nothing joining the road that leg described, so its vias go
+      // with it.
+      const carried = bridging
+        ? [
+            ...((day.legs[from] && day.legs[from].viaPoints) || []),
+            ...((day.legs[from + 1] && day.legs[from + 1].viaPoints) || []),
+          ]
+        : [];
+      day.legs.splice(from, bridging ? 2 : 1);
       state.legSeq[r] = [];
-      if (i > 0 && i < pts.length) {
-        day.legs.splice(from, 0, straightLeg([pts[i - 1].lng, pts[i - 1].lat], [pts[i].lng, pts[i].lat]));
+      if (bridging) {
+        // Two full legs can carry more vias than one leg may hold. Truncating is
+        // the only option that still deletes the point, and it is said out loud
+        // rather than silently reshaping the road.
+        if (carried.length > MAX_VIAS_PER_LEG) {
+          carried.length = MAX_VIAS_PER_LEG;
+          toast("Kept the first " + MAX_VIAS_PER_LEG + " shaping points on the joined leg", true);
+        }
+        day.legs.splice(from, 0, straightLeg([pts[i - 1].lng, pts[i - 1].lat], [pts[i].lng, pts[i].lat], carried));
         computeLeg(r, from);
       }
     }
@@ -2892,6 +2917,38 @@
     toast(rows.length + " days duplicated");
   }
 
+  // Rebuild a day's legs after some of its points have gone, keeping every leg
+  // the removal did not touch and carrying the shaping points of the ones it
+  // did onto the leg that replaces them. Call it with the day's point count and
+  // leg array as they were BEFORE the splices; returns the leg indices that now
+  // hold a straight placeholder and need the router.
+  //
+  // What this replaced: `day.legs = []` and a re-route of every leg in the day.
+  // That is correct and it is also why a rider who deleted one point out of
+  // thirty lost every shaping point they had drawn, and paid for twenty-nine
+  // routing requests to be told the other roads had not changed.
+  function rejoinDayLegs(day, beforeLegs, beforePoints, removed) {
+    const stale = [];
+    let trimmed = false;
+    day.legs = rejoinSpans(beforePoints, removed).map((span, j) => {
+      const whole = span.from === span.to && beforeLegs[span.from];
+      if (whole) return whole;
+      const vias = [];
+      for (let k = span.from; k <= span.to; k++) {
+        if (beforeLegs[k]) vias.push(...(beforeLegs[k].viaPoints || []));
+      }
+      if (vias.length > MAX_VIAS_PER_LEG) {
+        vias.length = MAX_VIAS_PER_LEG;
+        trimmed = true;
+      }
+      const a = day.points[j];
+      const b = day.points[j + 1];
+      stale.push(j);
+      return straightLeg([a.lng, a.lat], [b.lng, b.lat], vias);
+    });
+    return { stale, trimmed };
+  }
+
   function deleteSelectedPoints() {
     const byDay = selectedPointsByDay();
     const n = selectedPointCount();
@@ -2902,9 +2959,13 @@
     // kinds now — a POI costs exactly what a stop costs.
     if (n > 12 && !window.confirm("Deleting " + n + " points re-routes the legs around each. Continue?")) return;
     beginEdit("delete points");
+    const stale = new Map();
+    let trimmed = false;
     for (const [r, list] of byDay) {
       const day = state.days[r];
       if (!day) continue;
+      const beforeLegs = day.legs;
+      const beforePoints = day.points.length;
       // Already sorted descending by selectedPointsByDay().
       list.forEach((p) => day.points.splice(p.i, 1));
       // A DAY MUST KEEP A STOP. A selection can take every stop and leave the
@@ -2913,10 +2974,14 @@
       // first point and the cross-day drag applies to a day that has just lost
       // its only anchor.
       ensureDayHasStop(day);
-      // Legs are rebuilt wholesale rather than repaired around each removal —
-      // with several gone at once there is no "the leg either side" to bridge.
-      // Unconditional now: losing any point of either kind changes the road.
-      day.legs = [];
+      const out = rejoinDayLegs(
+        day,
+        beforeLegs,
+        beforePoints,
+        list.map((p) => p.i),
+      );
+      stale.set(r, out.stale);
+      trimmed = trimmed || out.trimmed;
       state.legSeq[r] = [];
     }
     const touched = [...byDay.keys()];
@@ -2924,16 +2989,10 @@
     rebuildLayers();
     renderMarkers();
     touched.forEach((r) => {
-      const day = state.days[r];
-      const nPts = day ? day.points.length : 0;
-      if (day && nPts >= 2 && day.legs.length === 0) {
-        fillMissingLegs(day);
-        computeLegsAround(
-          r,
-          Array.from({ length: nPts - 1 }, (_, k) => k),
-        );
-      }
+      const idx = stale.get(r);
+      if (idx && idx.length) computeLegsAround(r, idx);
     });
+    if (trimmed) toast("Some legs kept only the first " + MAX_VIAS_PER_LEG + " shaping points", true);
     refreshDerived();
     markDirty();
     toast(n + " points deleted");
@@ -2946,9 +3005,13 @@
     if (!n || !dst) return;
     beginEdit("move points");
     const moved = [];
+    const stale = new Map();
+    let trimmed = false;
     for (const [r, list] of byDay) {
       const day = state.days[r];
       if (!day || r === toDay) continue;
+      const beforeLegs = day.legs;
+      const beforePoints = day.points.length;
       list.forEach((p) => {
         const [pt] = day.points.splice(p.i, 1);
         if (pt) moved.push({ kind: p.kind, pt });
@@ -2956,32 +3019,45 @@
       // Same rule as the bulk delete: moving every stop out of a day leaves one
       // the save refuses, so the first point left behind becomes the anchor.
       ensureDayHasStop(day);
-      day.legs = [];
+      // And the same re-join: a leg between two points that both stayed behind
+      // is the same road, shaping points and all.
+      const out = rejoinDayLegs(
+        day,
+        beforeLegs,
+        beforePoints,
+        list.map((p) => p.i),
+      );
+      stale.set(r, out.stale);
+      trimmed = trimmed || out.trimmed;
       state.legSeq[r] = [];
     }
     // Reversed, because each day's list was spliced descending and the points
     // came off in the opposite order to the one they were in.
+    const dstBase = dst.points.length;
     moved.reverse().forEach(({ pt }) => dst.points.push(pt));
     // And the destination, which can be a day whose points all arrived as POIs.
     ensureDayHasStop(dst);
-    dst.legs = [];
+    // The arrivals land on the END of the destination, so every leg it already
+    // had still joins the two points it always joined — only the leg that
+    // reaches the first arrival and the legs among the arrivals are new. Keeping
+    // the rest keeps the destination's own shaping points, and spends no routing
+    // request on a road that has not changed.
+    dst.legs.length = Math.min(dst.legs.length, Math.max(0, dstBase - 1));
+    fillMissingLegs(dst);
     state.legSeq[toDay] = [];
+    const dstStale = [];
+    for (let k = Math.max(0, dstBase - 1); k < dst.points.length - 1; k++) dstStale.push(k);
+    stale.set(toDay, dstStale);
     const touched = new Set([...byDay.keys(), toDay]);
     endSelect();
     setActive(toDay);
     rebuildLayers();
     renderMarkers();
     touched.forEach((r) => {
-      const day = state.days[r];
-      const nPts = day ? day.points.length : 0;
-      if (day && nPts >= 2) {
-        fillMissingLegs(day);
-        computeLegsAround(
-          r,
-          Array.from({ length: nPts - 1 }, (_, k) => k),
-        );
-      }
+      const idx = stale.get(r);
+      if (idx && idx.length) computeLegsAround(r, idx);
     });
+    if (trimmed) toast("Some legs kept only the first " + MAX_VIAS_PER_LEG + " shaping points", true);
     refreshDerived();
     markDirty();
     toast(moved.length + " points moved to " + dayLabel(toDay));
@@ -3980,22 +4056,23 @@
       // `rides.time_anchor` keeps its other members and schedule.ts keeps
       // solving for them; nothing sets them any more. What survives here is the
       // fairness note, which is about WHOSE departure and is a live question.
-      (groups.length < 2 ? "" : '<div class="sg-anchor"><p class="sg-anchor-note" id="sg-anchor-note"></p></div>') +
-      // ONE BUTTON FOR THE RIDE, NOT ONE PER GROUP — #239. The question is
-      // "where do we meet", which has one answer for everybody. It appears with
-      // the second group, because one group has nobody to meet.
-      (groups.length < 2
-        ? ""
-        : // btn btn-sm, matching "Add a group" beside it—`.sg-meet` alone was
-          // styled ONLY as a descendant of `.sg-row`, so the moment this became
-          // a ride-wide button sitting outside the rows it inherited nothing at
-          // all. btn-sm is in $btn-flat, so it is a plain button rather than a
-          // highway sign; not btn-quiet, because this is the panel's primary
-          // action and adding a group is the incidental one.
-          '<button type="button" id="sg-meet-all" class="btn btn-sm sg-meet">Find a meeting point</button>') +
-      '<div class="sg-meet-out" id="sg-meet-out"></div>';
+      (groups.length < 2 ? "" : '<div class="sg-anchor"><p class="sg-anchor-note" id="sg-anchor-note"></p></div>');
     initGroupDrag($("sg-list"));
     renderAnchorNote();
+    // ONE BUTTON FOR THE RIDE, NOT ONE PER GROUP — #239. The question is "where
+    // do we meet", which has one answer for everybody. It appears with the
+    // second group, because one group has nobody to meet — and it lives in the
+    // page's own markup now, below "Add a group", so this only decides whether
+    // it is showing. `.sg-meet` sets `display: flex`, which BEATS the `hidden`
+    // attribute, so the stylesheet carries an explicit `[hidden]` rule; without
+    // it this line would do nothing at all.
+    const meetBtn = $("sg-meet-all");
+    if (meetBtn) meetBtn.hidden = groups.length < 2;
+    // A PROPOSAL ABOUT A GROUP THAT IS GONE HAS TO BE TAKEN DOWN HERE. The
+    // output used to be rebuilt empty by the innerHTML above; it is static now,
+    // so deleting the second group would leave its candidate list on screen and
+    // its dots on the map.
+    if (groups.length < 2 && state.meet) clearMeet();
     // THE PROPOSAL IS STATE, SO IT SURVIVES A RE-RENDER OF THIS PANEL. Taking a
     // meeting point moves a day's departure, which calls renderDays(), which
     // cascades into this function — and this function rebuilds #sg-meet-out.
@@ -4007,13 +4084,28 @@
     renderMeetOut();
   }
 
-  /** Re-render the proposal into a freshly built panel, and re-pair the rows
-   *  with the dots that are still on the map. */
+  /** Redraw the proposal and re-pair its rows with the dots on the map.
+   *
+   *  #sg-meet-out is no longer rebuilt by renderSubgroups() — the button and the
+   *  output are static markup since 2026-09-05 — but this still runs on every
+   *  render, because showMeetPreview() binds hover handlers to the ROWS and
+   *  those are recreated whenever the proposal is redrawn. Drawing from
+   *  `state.meet` is what keeps the panel and the map showing one object. */
   function renderMeetOut() {
     const out = $("sg-meet-out");
     if (!out || !state.meet || !(state.meet.groups || []).length) return;
     out.innerHTML = (state.meetNote || "") + meetAllHtml(state.meet);
     showMeetPreview(out, state.meet);
+  }
+
+  /** Take a proposal down: the panel, the state it is drawn from, and the dots
+   *  and approach lines it put on the map. */
+  function clearMeet() {
+    state.meet = null;
+    state.meetNote = "";
+    const out = $("sg-meet-out");
+    if (out) out.innerHTML = "";
+    showMeetPreview(document.createElement("div"), null);
   }
 
   /**
@@ -4200,6 +4292,13 @@
     // rather than creating anything. Ziad's call, 2026-09-04.
     add.addEventListener("click", openNewGroup);
 
+    // BOUND DIRECTLY, because this button is in the page's own markup now rather
+    // than inside #sg-body — it was delegated from that element while
+    // renderSubgroups() rebuilt it on every render, and a delegated handler on a
+    // static element is a listener that can never fire.
+    const meetBtn = $("sg-meet-all");
+    if (meetBtn) meetBtn.addEventListener("click", findMeet);
+
     // Delegated on the body, because every row is rebuilt by renderSubgroups
     // and a handler bound to a row would be thrown away with it.
     const body = $("sg-body");
@@ -4246,11 +4345,19 @@
       if (moved) moved.focus();
     });
 
+    // TAKING A CANDIDATE IS DELEGATED ON #sg-meet-out, NOT ON #sg-body. It rode
+    // on the body handler while the proposal was rendered inside that element;
+    // the output is its own static element since 2026-09-05, so a handler on the
+    // body would never see the click — and the failure is a Take button that
+    // silently does nothing, with no error anywhere.
+    const meetOut = $("sg-meet-out");
+    if (meetOut) {
+      meetOut.addEventListener("click", (e) => {
+        if (e.target.classList.contains("sg-take")) takeMeet(e.target.dataset);
+      });
+    }
+
     body.addEventListener("click", (e) => {
-      if (e.target.classList.contains("sg-take")) return takeMeet(e.target.dataset);
-      // Ride-wide, so it is deliberately checked BEFORE the row lookup — it sits
-      // below every row and closest(".sg-row") would find nothing.
-      if (e.target.id === "sg-meet-all") return findMeet();
       const row = e.target.closest(".sg-row");
       if (!row) return;
       const g = subgroupByUid(row.dataset.sg);
@@ -4398,7 +4505,14 @@
         tip: (name ? name + SEP : "") + meetTip(c),
         label: "Use meeting point " + (i + 1) + " for " + (name || "this group") + ", " + meetTip(c),
       })),
-      (i) => rows.forEach((li, j) => li.classList.toggle("is-lit", j === i)),
+      // HOVERING THE DOT LIFTS ITS ROAD TOO, not just its row. #232's rule is
+      // that a dot and its row hover BOTH ways, and the approach line is the
+      // third thing that pairing is about — a rider running the pointer over
+      // three dots is asking which road each one means.
+      (i) => {
+        rows.forEach((li, j) => li.classList.toggle("is-lit", j === i));
+        highlightMeetApproaches(state.map, i);
+      },
       // PRESSING THE DOT PRESSES THE ROW'S BUTTON, rather than repeating what
       // takeMeet does with the row's dataset — a second copy of that call would
       // drift the first time the data attributes changed.
@@ -4826,10 +4940,11 @@
       // than replaced by it: the departure line is about the decision just made,
       // and the sections under it are the ones still to make.
       //
-      // `$("sg-meet-out")` IS RE-READ rather than closed over. syncDeparturesToMeet
-      // calls renderDays(), which cascades into renderSubgroups(), which replaces
-      // this element — writing to the captured one puts the answer into a node
-      // that is no longer in the document.
+      // `$("sg-meet-out")` IS RE-READ rather than closed over. It was replaced
+      // on every render until 2026-09-05, when it became static markup of its
+      // own — so writing to a captured node is no longer wrong, and re-reading
+      // is kept because syncDeparturesToMeet() renders the whole panel in
+      // between and this is the form that survives that being true again.
       state.meetNote = '<p class="sg-note">' + syncDeparturesToMeet(placed) + "</p>";
       const host = $("sg-meet-out");
       if (!host) return;
@@ -7284,10 +7399,14 @@
   // exactly N-1 legs, enforced server-side in ride-graph.ts) breaks at both ends
   // until they are rebuilt.
   //
-  // Legs are dropped wholesale on both sides rather than patched. Patching means
-  // reasoning about which of the surviving legs still joins the same pair of
-  // stops, and the shaping points on any leg that touched the moved stop are
-  // meaningless regardless. computeLegsAround refills them from the router.
+  // Legs are PATCHED on both sides rather than dropped wholesale. They used to be
+  // dropped, on the reasoning that the shaping points on any leg touching the
+  // moved point are meaningless regardless — true of those legs and of no other,
+  // and it cost the rider every hand-drawn shaping point on both days plus a
+  // routing request for each road that had not changed. The source is a removal,
+  // which is rejoinDayLegs(); the destination is an insertion, which is exactly
+  // what addPoint does — one placeholder spliced in, the two legs either side
+  // recomputed.
   function movePointAcrossDays(evt) {
     const fromDay = Number(evt.from.dataset.day);
     const toDay = Number(evt.to.dataset.day);
@@ -7302,6 +7421,8 @@
 
     beginEdit("move " + (kind === "stop" ? "stop" : "POI") + " between days");
 
+    const srcLegs = src.legs;
+    const srcPoints = src.points.length;
     const [pt] = src.points.splice(i, 1);
     // Where it landed in the DESTINATION's list — Sortable's index into the
     // ROWS, clamped because .add-row is a child too and always last.
@@ -7326,28 +7447,28 @@
     // would leave a day the save refuses and payload() drops whole.
     ensureDayHasStop(src);
 
-    src.legs = [];
-    dst.legs = [];
+    const srcOut = rejoinDayLegs(src, srcLegs, srcPoints, [i]);
     state.legSeq[fromDay] = [];
+
+    // The destination gains a point at `at`: splicing a placeholder in at `at`
+    // leaves the two legs needing the router at `at - 1` and `at`, and every
+    // other leg still joins the pair of points it always joined.
+    if (dst.points.length > 1) {
+      dst.legs.splice(Math.min(at, dst.legs.length), 0, straightLeg([pt.lng, pt.lat], [pt.lng, pt.lat]));
+    }
+    fillMissingLegs(dst);
     state.legSeq[toDay] = [];
 
-    // Rebuilt rather than patched: both lists have shifted indices, and every
-    // row's data-i has to agree with the arrays again before any later handler
-    // reads one.
+    // The two day LISTS are rebuilt rather than patched: both have shifted
+    // indices, and every row's data-i has to agree with the arrays again before
+    // any later handler reads one.
     renderDays();
     rebuildLayers();
     renderMarkers();
-    // Both days are refilled regardless of kind: the legs were cleared above and
-    // a day whose points merely shifted still needs its placeholders back.
-    [fromDay, toDay].forEach((r) => {
-      const day = state.days[r];
-      if (!day) return;
-      fillMissingLegs(day);
-      computeLegsAround(
-        r,
-        Array.from({ length: Math.max(0, day.points.length - 1) }, (_, k) => k),
-      );
-    });
+    // Only the legs that actually changed go to the router.
+    if (srcOut.stale.length) computeLegsAround(fromDay, srcOut.stale);
+    computeLegsAround(toDay, [at - 1, at]);
+    if (srcOut.trimmed) toast("The joined leg kept only the first " + MAX_VIAS_PER_LEG + " shaping points", true);
     setActive(toDay);
     refreshDerived();
     markDirty();

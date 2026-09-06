@@ -148,6 +148,17 @@ h1 {
     opacity: 0.6;
     cursor: default;
   }
+
+  // THE `display` ABOVE OUTRANKS THE UA SHEET'S `[hidden] { display: none }`,
+  // so without this line the attribute does nothing to any button in the app.
+  // It cost a layout bug on the builder's Groups tab: "Add a group" sets
+  // `hidden` while its form is open, stayed in the flex row anyway, and the
+  // full-width form was laid out beside it and overflowed the panel by the
+  // button's own width. Same trap as .row-roles and .sg-meet — fixed here
+  // because it is a property of every `.btn`, not of one screen.
+  &[hidden] {
+    display: none;
+  }
 }
 
 // Highway guide-sign treatment: green field, white legend, and a white keyline

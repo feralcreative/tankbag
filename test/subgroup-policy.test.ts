@@ -11,6 +11,7 @@ import {
   hasSubgroups,
   junctions,
   neverConverges,
+  startDayOf,
   strandOf,
   type StrandDay,
 } from '../src/subgroups/policy'
@@ -102,6 +103,41 @@ describe('junctions', () => {
     // where that group's private stretch ends. Reported, because the timeline
     // has to draw it.
     expect(junctions(ride(SEA, null))).toEqual([{ position: 1, kind: 'meet', subgroupIds: [SEA] }])
+  })
+})
+
+describe('startDayOf', () => {
+  // RIDE 34, WHICH IS WHERE THIS CAME FROM. Two one-point days left over from
+  // before a group seeded its own route are tagged for nobody, so they sort
+  // ahead of both satellites' own days — and `strand[0]` handed each of them the
+  // OTHER group's starting point. Both joining groups came back with identical
+  // candidates and identical diverts, and the group starting in San Luis Obispo
+  // was offered a meeting point north of Santa Cruz.
+  const leftovers = ride(SF, null, null, SEA, SAC)
+
+  it('gives a group its OWN first day, not a shared one that sorts before it', () => {
+    expect(startDayOf(leftovers, SEA)?.position).toBe(3)
+    expect(startDayOf(leftovers, SAC)?.position).toBe(4)
+  })
+
+  it('gives the main group its own day too', () => {
+    expect(startDayOf(leftovers, SF)?.position).toBe(0)
+  })
+
+  it('falls back to the strand for a group with no day of its own', () => {
+    // Riding only shared days: where the shared road starts is the one honest
+    // answer, and it is what the old rule returned for everybody.
+    expect(startDayOf(ride(null, null, SF), SEA)?.position).toBe(0)
+  })
+
+  it('is null when the group has no days at all', () => {
+    expect(startDayOf([], SEA)).toBe(null)
+  })
+
+  it('agrees with strandOf when a group owns the first day of its strand', () => {
+    const simple = ride(SEA, SF, null)
+    expect(startDayOf(simple, SEA)).toBe(strandOf(simple, SEA)[0])
+    expect(startDayOf(simple, SF)).toBe(strandOf(simple, SF)[0])
   })
 })
 

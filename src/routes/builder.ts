@@ -921,6 +921,16 @@ function builderHtml(
           <div class="tab-actions">
             <button type="button" class="btn btn-sm btn-quiet" id="sg-add">Add a group</button>
           </div>
+          <!-- THE MEETING-POINT BUTTON IS STATIC MARKUP AND SITS BELOW .tab-actions,
+               which is the only way to get "Add a group" above it: the group rows and
+               this button used to be one innerHTML in #sg-body, so nothing could be
+               placed between them. Ziad's call, 2026-09-05. Being static also means
+               #sg-meet-out is no longer destroyed by renderSubgroups(), so a proposal
+               survives a re-render by not being rebuilt at all—state.meet is still
+               what it is drawn from, because taking one point re-renders the rows.
+               Hidden until the ride has a second group: one group has nobody to meet. -->
+          <button type="button" class="btn btn-sm sg-meet" id="sg-meet-all" hidden>Find meeting points</button>
+          <div class="sg-meet-out" id="sg-meet-out"></div>
         </div>`
 
   // RIDERS. Who is coming, what they are bringing, and which approach they are

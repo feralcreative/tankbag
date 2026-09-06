@@ -306,3 +306,57 @@ describe('circlePath', () => {
     expect(S.circlePath(null, 100)).toBeNull()
   })
 })
+
+// Re-joining a day after points are removed.
+//
+// This is the arithmetic that decides whether a rider's hand-drawn shaping
+// points survive a delete. Getting it wrong is silent both ways: too wide a
+// span throws away a leg nothing touched (and pays the router to redraw it),
+// too narrow a one drops the vias of a leg that was swallowed.
+describe('rejoinSpans', () => {
+  it('leaves an untouched day as one span per leg', () => {
+    expect(S.rejoinSpans(4, [])).toEqual([
+      { from: 0, to: 0 },
+      { from: 1, to: 1 },
+      { from: 2, to: 2 },
+    ])
+  })
+
+  // Removing point 2 of 0..3 merges legs 1 and 2 into one and leaves leg 0 alone.
+  it('merges the two legs either side of a removed point', () => {
+    expect(S.rejoinSpans(4, [2])).toEqual([
+      { from: 0, to: 0 },
+      { from: 1, to: 2 },
+    ])
+  })
+
+  // The ends are not a merge: there is only ever one leg to lose.
+  it('drops one leg at either end of the day', () => {
+    expect(S.rejoinSpans(4, [0])).toEqual([
+      { from: 1, to: 1 },
+      { from: 2, to: 2 },
+    ])
+    expect(S.rejoinSpans(4, [3])).toEqual([
+      { from: 0, to: 0 },
+      { from: 1, to: 1 },
+    ])
+  })
+
+  it('swallows every leg across a run of removed points', () => {
+    expect(S.rejoinSpans(6, [1, 2, 3])).toEqual([
+      { from: 0, to: 3 },
+      { from: 4, to: 4 },
+    ])
+  })
+
+  it('takes the removals in any order, and repeated', () => {
+    expect(S.rejoinSpans(6, [3, 1, 3, 2])).toEqual(S.rejoinSpans(6, [1, 2, 3]))
+  })
+
+  it('has no spans when fewer than two points survive', () => {
+    expect(S.rejoinSpans(3, [0, 1])).toEqual([])
+    expect(S.rejoinSpans(3, [0, 1, 2])).toEqual([])
+    expect(S.rejoinSpans(1, [])).toEqual([])
+    expect(S.rejoinSpans(0, [])).toEqual([])
+  })
+})
